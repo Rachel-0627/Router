@@ -13,13 +13,14 @@ const schema = z.object({
   // ---- 阶段0 必需 ----
   APP_URL: z.string().min(1).default('http://localhost:3000'),
   APP_NAME: z.string().min(1).default('AI Gateway'),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL 未设置,请复制 .env.example 为 .env.local'),
+  // 阶段1 营销站不用数据库;阶段3 接认证时改回必填
+  DATABASE_URL: z.string().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
   // ---- 阶段1 起需要 ----
   PRICE_RATIO_OF_OFFICIAL: z.coerce.number().positive().max(1).default(0.3),
 
-  // ---- 阶段2 起需要(现在可空) ----
+  // ---- 阶段3 起需要(现在可空) ----
   NEWAPI_BASE_URL: z.string().optional(),
   NEWAPI_ADMIN_TOKEN: z.string().optional(),
   AUTH_SECRET: z.string().optional(),
@@ -50,6 +51,7 @@ export const env = load()
 
 /** 某个后续阶段的变量是否已配好,用于功能开关 */
 export const featureReady = {
+  db: () => Boolean(env.DATABASE_URL),
   newapi: () => Boolean(env.NEWAPI_BASE_URL && env.NEWAPI_ADMIN_TOKEN),
   auth: () => Boolean(env.AUTH_SECRET),
   creem: () => Boolean(env.CREEM_API_KEY && env.CREEM_WEBHOOK_SECRET),
