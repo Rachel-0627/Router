@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #ffffff;
+  --fg: #0f1115;
+  --muted: #5b6472;
+  --border: #e4e7ec;
+  --card: #fafbfc;
+  --accent: #2f6f4f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f13;
+    --fg: #e8eaed;
+    --muted: #98a2b3;
+    --border: #232833;
+    --card: #14171d;
+    --accent: #6fbf95;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 法务页正文排版 */
+.prose-legal h2 { @apply text-lg font-semibold mt-10 mb-3; }
+.prose-legal h3 { @apply text-base font-semibold mt-6 mb-2; }
+.prose-legal p  { @apply text-[15px] leading-7 mb-4; color: var(--muted); }
+.prose-legal ul { @apply list-disc pl-6 mb-4 space-y-2 text-[15px] leading-7; color: var(--muted); }
+.prose-legal strong { color: var(--fg); }

@@ -1,0 +1,33 @@
+# 依赖
+node_modules/
+.pnp
+.pnp.*
+
+# 构建产物
+.next/
+out/
+build/
+dist/
+
+# 环境变量 —— 绝不提交
+.env
+.env.*
+!.env.example
+
+# 编辑器 / 系统
+.DS_Store
+*.pem
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vscode/
+.idea/
+
+# 本地测试产物
+/tmp/
+*.local
+
+# 工具自动生成的 agent 配置(每次 next dev 会重建,不入库)
+CLAUDE.md
+AGENTS.md
