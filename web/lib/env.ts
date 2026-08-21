@@ -27,7 +27,12 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-  // ---- 阶段3 起需要(现在可空) ----
+  // ---- 阶段4 支付(现在可空) ----
+  /** 主力通道 */
+  PAYMENT_PROVIDER: z.enum(['nexapay', 'creem', 'paddle']).default('nexapay'),
+  NEXAPAY_API_KEY: z.string().optional(),
+  /** webhook 路径里的随机段,防止回调地址被猜到 */
+  PAYMENT_WEBHOOK_PATH_SECRET: z.string().optional(),
   CREEM_API_KEY: z.string().optional(),
   CREEM_WEBHOOK_SECRET: z.string().optional(),
   PADDLE_API_KEY: z.string().optional(),
@@ -54,6 +59,7 @@ export const featureReady = {
   db: () => Boolean(env.DATABASE_URL),
   newapi: () => Boolean(env.NEWAPI_BASE_URL && env.NEWAPI_ADMIN_TOKEN),
   auth: () => Boolean(env.AUTH_SECRET),
+  nexapay: () => Boolean(env.NEXAPAY_API_KEY),
   creem: () => Boolean(env.CREEM_API_KEY && env.CREEM_WEBHOOK_SECRET),
   paddle: () => Boolean(env.PADDLE_API_KEY && env.PADDLE_WEBHOOK_SECRET),
   alert: () => Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),

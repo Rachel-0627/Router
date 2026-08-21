@@ -73,8 +73,7 @@ ai-gateway/
 │   │       ├── usage/                 用量数据
 │   │       ├── checkout/              发起支付
 │   │       └── webhook/
-│   │           ├── creem/             Creem 回调(幂等)
-│   │           └── paddle/            Paddle 回调(幂等)
+│   │           └── [provider]/[secret]/  支付回调(路径带密钥+回查校验) ✅
 │   │
 │   ├── lib/
 │   │   ├── newapi/                new-api 管理 API 封装
@@ -83,13 +82,14 @@ ai-gateway/
 │   │   │   ├── tokens.ts              建 key/删 key/改限额
 │   │   │   └── logs.ts                拉用量日志
 │   │   ├── payment/               支付通道(可插拔)
-│   │   │   ├── provider.ts            抽象接口 ⭐
-│   │   │   ├── creem.ts               Creem 实现
-│   │   │   └── paddle.ts              Paddle 实现
+│   │   │   ├── provider.ts            抽象接口 ⭐                ✅
+│   │   │   ├── nexapay.ts             NexaPay 实现              ✅
+│   │   │   └── index.ts               通道选择                  ✅
+│   │   ├── credits.ts             ⭐ 幂等入账(三道防线)        ✅
 │   │   ├── db/
 │   │   │   ├── schema.ts              5 张表定义                ✅
 │   │   │   ├── index.ts               连接(单例池)              ✅
-│   │   │   └── queries/               各表查询封装              [阶段2]
+│   │   │   └── queries/orders.ts      订单查询                  ✅
 │   │   ├── pricing/
 │   │   │   ├── models.ts              5个模型 list价+VIP成本    ✅
 │   │   │   └── calculate.ts           售价/毛利计算(唯一入口)   ✅
@@ -135,7 +135,8 @@ ai-gateway/
 | `app/(ops)/` | **你的运营后台**:可支配现金/备货天数/毛利/拒付。独立密钥保护 |
 | `app/api/webhook/` | 收款回调 → 幂等入账 → 调 new-api 加额度 |
 | `lib/newapi/` | **唯一**与 new-api 通信的地方,别处不直接调 |
-| `lib/payment/` | 支付通道抽象,换支付商只改这一层 |
+| `lib/payment/` | 支付通道抽象,换支付商只改这一层。**webhook 内容一律不信,回查支付商确认** |
+| `lib/credits.ts` | **幂等入账**:回查校验 + 行级锁 + 状态幂等,重复回调不会重复加钱 |
 | `lib/pricing/` | 成本与售价的唯一计算来源 |
 | `ops/balance-monitor/` | 防止上游余额耗尽导致全站宕机 |
 | `ops/upstream-verify/` | 每周验证上游没有变质(注入/缓存/价格) |
