@@ -5,7 +5,7 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
-        <Link href="/" className="font-mono text-[15px] font-semibold tracking-tight">
+        <Link href="/" className="font-mono text-[16px] font-semibold tracking-tight">
           {site.name}
         </Link>
 
@@ -21,7 +21,7 @@ export function Nav() {
           ))}
           <Link
             href="/register"
-            className="ml-2 rounded-md bg-[var(--fg)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--bg)] transition-opacity hover:opacity-85"
+            className="ml-2 rounded-md bg-[var(--fg)] px-3.5 py-1.5 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-85"
           >
             Get started
           </Link>

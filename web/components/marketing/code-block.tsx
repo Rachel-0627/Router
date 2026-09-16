@@ -26,7 +26,7 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
         </button>
       </div>
       <pre className="overflow-x-auto px-4 py-3.5">
-        <code className="font-mono text-[13px] leading-6">{code}</code>
+        <code className="font-mono text-[14px] leading-6">{code}</code>
       </pre>
     </div>
   )

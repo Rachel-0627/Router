@@ -23,12 +23,15 @@
 | 项目 | 结论 |
 |---|---|
 | **上游性质** | 号池模式(养 Claude Max 订阅账号轮询),非官方 API |
-| **主力渠道** | 泽西同学 **VIP 分组** — 成本 ¥2.20/M,毛利 81.2% |
-| **备用渠道** | 泽西同学 **默认分组** — 成本 ¥4.40/M,毛利 62.5% |
-| **已废渠道** | Claude 专属(号池已炸)、公司分组(不通) |
+| **主力渠道** | 泽西同学 **VIP 分组** — Opus 成本 ¥2.20/M,四折下毛利 84.7% |
+| **备用渠道** | 泽西同学 **默认分组** — Opus 成本 ¥4.40/M,四折下毛利 69.4% |
+| **末档兜底** | **Claude 专属** — 2 倍默认价。2026-09 复查**仍在售**,需重测可用性 |
 | **产品定位** | **仅编码 Agent 场景**(Claude Code/Cursor/Cline)。注入无法消除,通用 API 场景不可做 |
-| **定价** | 官方 list price × 30%,充值 $20/$50/$200 |
-| **净利率** | **76.3%** · 盈亏平衡月营收 $42 |
+| **定价** | **官方 list price × 80%**(八折,两组同价,各自可用环境变量调),充值 $20/$50/$200 |
+| **产品分组** | 用户建 key 时选:**Claude**(已上架) / **Codex**(待验证注入行为) |
+| **毛利率** | Claude 组 **92.5%** · Codex 组 **97.8%**(主力分组均值) |
+| **抗风险** | 降级到最贵兜底档仍有 **69.4%** 毛利;上游涨到 **6.5 倍**才触发涨价评估 |
+| **净利率** | ⚠️ `docs/成本与风险.md` 整体待重算(基数混乱 + 支付费率未知) |
 | **核心风险** | 号池会周期性被封 → 间歇性故障是日常,**故障转移是核心能力不是附加功能** |
 
 ---
@@ -46,41 +49,64 @@ ai-gateway/
 │   ├── app/
 │   │   ├── (marketing)/           ── 公开页面 ──
 │   │   │   ├── page.tsx               落地页                      ✅
-│   │   │   ├── pricing/               定价页(含模型清单)        ✅
-│   │   │   ├── docs/                  接入文档(CC/Cursor/SDK)  ✅
-│   │   │   │   ├── claude-code/       Claude Code 接入
-│   │   │   │   ├── cursor/            Cursor 接入
-│   │   │   │   └── sdk/               OpenAI/Anthropic SDK 接入
-│   │   │   ├── status/                状态页(阶段6接真实数据)   ✅
+│   │   │   ├── pricing/               定价页(逐模型 ours/list 对比) ✅
+│   │   │   ├── docs/page.tsx          接入文档(CC/Cursor/SDK 同一页) ✅
+│   │   │   │                          内容多了再拆子页,现在没必要
+│   │   │   ├── status/                状态页(真实探测+24h可用率) ✅
+│   │   │   │                          无数据时诚实说"无数据",
+│   │   │   │                          绝不默认显示"一切正常"
 │   │   │   └── legal/                 法务页 ×4                  ✅
 │   │   │       ├── terms/  privacy/  refund/  aup/
 │   │   │
-│   │   ├── (auth)/                ── 认证 ──
-│   │   │   ├── login/  register/  verify/
+│   │   ├── (auth)/                ── 认证 ── ✅
+│   │   │   ├── login/                 登录                      ✅
+│   │   │   └── register/              注册                      ✅
+│   │   │                              (邮箱验证待定:还没有邮件服务)
+│   │   │
+│   │   ├── v1/                    ── 网关端点(用户的请求打这里) ── ✅
+│   │   │   ├── messages/              Anthropic API(Claude Code) ✅
+│   │   │   └── chat/completions/      OpenAI 兼容(Cursor/SDK)    ✅
 │   │   │
 │   │   ├── (dashboard)/           ── 控制台(登录后) ──
-│   │   │   ├── page.tsx               概览:余额+近期用量
-│   │   │   ├── keys/                  API Key 管理
-│   │   │   ├── usage/                 用量看板
-│   │   │   └── billing/               充值 + 交易记录
+│   │   │   ├── layout.tsx             鉴权唯一入口 + 导航        ✅
+│   │   │   └── dashboard/
+│   │   │       ├── page.tsx           概览:余额/7日花费/key数    ✅
+│   │   │       ├── keys/              API Key 管理(明文只给一次) ✅
+│   │   │       ├── usage/             用量看板(柱状/排序条/命中率) ✅
+│   │   │       └── billing/           充值 + 交易记录            ✅
 │   │   │
-│   │   ├── (ops)/                 ── 运营后台(只有你能看) ──
-│   │   │   └── ops-2f8a/              资金安全/备货/经营/风险/用户
+│   │   ├── (ops)/                 ── 运营后台(只有你能看) ── ✅
+│   │   │   └── ops-2f8a/              资金安全/经营/用户/订单     ✅
+│   │   │                              独立口令 + 独立 audience,
+│   │   │                              用户会话冒充不进来
 │   │   │
 │   │   └── api/                   ── 服务端接口(BFF) ──
-│   │       ├── auth/                  认证回调
-│   │       ├── keys/                  Key 增删改查
-│   │       ├── usage/                 用量数据
-│   │       ├── checkout/              发起支付
+│   │       │  (认证/Key/充值都用 Server Action,不走 REST,少一层)
+│   │       │   app/actions/auth.ts     注册/登录/登出            ✅
+│   │       │   app/actions/keys.ts     Key 增删改禁              ✅
+│   │       │   app/actions/billing.ts  发起充值                  ✅
 │   │       └── webhook/
 │   │           └── [provider]/[secret]/  支付回调(路径带密钥+回查校验) ✅
 │   │
 │   ├── lib/
-│   │   ├── newapi/                new-api 管理 API 封装
-│   │   │   ├── client.ts              HTTP 客户端(超时/重试)
-│   │   │   ├── users.ts               建用户/查余额/加额度
-│   │   │   ├── tokens.ts              建 key/删 key/改限额
-│   │   │   └── logs.ts                拉用量日志
+│   │   ├── newapi/                new-api 管理 API 封装(基于实测,非猜测) ✅
+│   │   │   ├── client.ts              JWT 登录+缓存/超时/重试     ✅
+│   │   │   ├── users.ts               建用户/查余额/加额度        ✅
+│   │   │   ├── tokens.ts              建/删/改 key ⚠️key 永远脱敏 ✅
+│   │   │   ├── logs.ts                拉用量日志 ⚠️字段待真实流量核对
+│   │   │   └── channels.ts            渠道列表/测试/余额刷新     ✅
+│   │   ├── gateway/               ⭐ 代理层(A 方案核心)          ✅
+│   │   │   ├── proxy.ts               鉴权→余额→限流→转发→计费   ✅
+│   │   │   ├── usage.ts               从响应/SSE 提取 token 数    ✅
+│   │   │   └── meter.ts               落流水 + 日汇总            ✅
+│   │   ├── auth/                  认证                          ✅
+│   │   │   ├── password.ts            scrypt 哈希(Node 内置)     ✅
+│   │   │   ├── session.ts             jose JWT + HttpOnly cookie ✅
+│   │   │   ├── ops.ts                 运营后台独立门禁            ✅
+│   │   │   └── dal.ts                 当前用户(鉴权唯一入口)      ✅
+│   │   ├── keys.ts                我们自己签发的 key(只存哈希)    ✅
+│   │   ├── rate-limit.ts          限流 ⚠️内存版,放量前须换 Redis ✅
+│   │   ├── alert.ts               告警(Telegram,自动脱敏密钥)  ✅
 │   │   ├── payment/               支付通道(可插拔)
 │   │   │   ├── provider.ts            抽象接口 ⭐                ✅
 │   │   │   ├── nexapay.ts             NexaPay 实现              ✅
@@ -89,16 +115,37 @@ ai-gateway/
 │   │   ├── db/
 │   │   │   ├── schema.ts              5 张表定义                ✅
 │   │   │   ├── index.ts               连接(单例池)              ✅
-│   │   │   └── queries/orders.ts      订单查询                  ✅
-│   │   ├── pricing/
-│   │   │   ├── models.ts              5个模型 list价+VIP成本    ✅
-│   │   │   └── calculate.ts           售价/毛利计算(唯一入口)   ✅
+│   │   │   └── queries/
+│   │   │       ├── orders.ts          订单查询                  ✅
+│   │   │       ├── keys.ts            Key 查询(网关热路径)      ✅
+│   │   │       ├── ledger.ts          流水与订单列表            ✅
+│   │   │       ├── usage.ts           用量聚合                  ✅
+│   │   │       └── ops.ts             运营指标(可支配现金等)     ✅
+│   │   ├── pricing/               ⭐ 两条产品线,每条独立倍率
+│   │   │   ├── types.ts               类型(含长上下文分档)       ✅
+│   │   │   ├── groups.ts              Claude(八折·live)/         ✅
+│   │   │   │                          Codex(八折·pending 待验注入)
+│   │   │   ├── models/claude.ts       5 个 Claude               ✅
+│   │   │   ├── models/codex.ts        6 个 GPT(luna 故意不上架) ✅
+│   │   │   ├── models/index.ts        汇总                      ✅
+│   │   │   └── calculate.ts           按组倍率+按档位(唯一入口)  ✅
 │   │   ├── site.ts                站点配置(品牌/域名)          ✅
 │   │   ├── auth.ts                认证配置                    [阶段3]
 │   │   ├── money.ts               金额换算(micro USD)          ✅
 │   │   ├── env.ts                 环境变量校验(启动即校验)      ✅
 │   │   ├── errors.ts              统一友好报错                 ✅
 │   │   └── logger.ts              日志(自动脱敏密钥)            ✅
+│   │
+│   ├── ops/                       本地校验脚本(需读 app 代码,故放 web 内)
+│   │   ├── check-pricing.ts       价格漂移校验    npm run check:pricing  ✅
+│   │   ├── verify-idempotency.ts  幂等入账验证    npm run verify:idem    ✅
+│   │   ├── verify-auth.ts         认证逻辑验证    npm run verify:auth    ✅
+│   │   ├── verify-newapi.ts       new-api 联调    npm run verify:newapi  ✅
+│   │   ├── verify-gateway.ts      网关端到端验证  npm run verify:gateway ✅
+│   │   ├── channel-health.ts      渠道探测⭐      npm run ops:health     ✅
+│   │   ├── balance-monitor.ts     余额水位告警    npm run ops:balance    ✅
+│   │   ├── mock-upstream.mjs      假上游(测代理用) npm run mock:upstream ✅
+│   │   └── seed-gateway-fixture.ts 造测试用户和 key                      ✅
 │   │
 │   └── components/
 │       ├── marketing/             ── 已完成 ──
@@ -108,17 +155,13 @@ ai-gateway/
 │       │   └── legal-page.tsx         法务页排版                ✅
 │       └── dashboard/             控制台组件
 │
-└── ops/                           运维脚本  → VPS cron
-    ├── channel-health/           渠道健康监控 ⭐核心
-    │   ├── probe.ts                   每5分钟探测全部分组
-    │   └── failover.ts                状态变化 → 告警 + 切渠道
-    ├── upstream-verify/           上游验证(每周重跑)
-    │   ├── check-cache.ts             缓存真实性验证
-    │   ├── check-injection.ts         prompt 注入痕迹检测
-    │   └── stress-test.ts             并发/限流压测
-    └── balance-monitor/           余额监控
-        ├── monitor.ts                 查余额 + 算消耗速度 + 判水位
-        └── alert.ts                   三级告警(Telegram/邮件/推送)
+└── ops/                           (已并入 web/ops/ —— 这些脚本都要读 app 代码,
+                                    单独一套依赖不划算。VPS 上 cron 直接跑
+                                    npm run ops:health / ops:balance)
+    └── upstream-verify/           ⬜ 仍待写,需上游 key 才能测
+        ├── check-cache.ts             缓存真实性验证
+        ├── check-injection.ts         prompt 注入痕迹检测
+        └── stress-test.ts             并发/限流压测
 ```
 
 **另有 new-api(Docker)部署在美西 VPS,不在本仓库内,只做配置管理。**
@@ -135,9 +178,11 @@ ai-gateway/
 | `app/(ops)/` | **你的运营后台**:可支配现金/备货天数/毛利/拒付。独立密钥保护 |
 | `app/api/webhook/` | 收款回调 → 幂等入账 → 调 new-api 加额度 |
 | `lib/newapi/` | **唯一**与 new-api 通信的地方,别处不直接调 |
+| `lib/gateway/` | ⭐ 用户请求的入口。**new-api 只是渠道路由器**,身份/余额/限流/计费全在这里 |
+| `lib/keys.ts` | 我们自己签发 key。明文只在创建时给一次,库里只存 SHA-256 |
 | `lib/payment/` | 支付通道抽象,换支付商只改这一层。**webhook 内容一律不信,回查支付商确认** |
 | `lib/credits.ts` | **幂等入账**:回查校验 + 行级锁 + 状态幂等,重复回调不会重复加钱 |
-| `lib/pricing/` | 成本与售价的唯一计算来源 |
+| `lib/pricing/` | 售价按**产品分组**倍率 + **长上下文档位**;成本按**上游分组**。三者别混 |
 | `ops/balance-monitor/` | 防止上游余额耗尽导致全站宕机 |
 | `ops/upstream-verify/` | 每周验证上游没有变质(注入/缓存/价格) |
 | `ops/channel-health/` | **每5分钟探测全部分组**,号池炸了立刻告警并切渠道 |
@@ -159,17 +204,52 @@ ai-gateway/
 
 ## 当前进度
 
-- [x] 上游完整验证(协议/缓存/注入/分组/号池)
-- [x] 支付方案(Creem + Paddle + Payoneer)
-- [x] 定价设计(VIP 成本,官方3折,净利 76.3%)
-- [x] 架构与开发计划 v2
-- [x] **阶段0 地基** — 骨架/5张表/环境校验/报错/日志脱敏
-- [x] **阶段1 落地页 + 法务页** — 8个页面全部构建通过
-- [ ] **← 现在这里** 提交 Creem/Paddle 申请 → 同时开阶段2
-- [ ] 阶段2 网关 + 故障转移(2天)⬆️ 已提前
-- [ ] 阶段3 认证 + Key 管理(2天)
-- [ ] 阶段4 支付充值(2天)
-- [ ] 阶段5 用量看板 + 运营后台(2.5天)
-- [ ] 阶段6 Status 页 + 打磨(1天)
+### 已完成(本地全部验证通过)
 
-**开发净工时 11.5 天 · 日历 3-4 周(卡在 MoR 审核)**
+- [x] 上游完整验证 · ⚠️ 2026-08 版,上游已从 4 个分组变成 14 个,待重跑
+- [x] 定价设计(四折,进货毛利 84.9%)+ 价格漂移自动校验
+- [x] **阶段0 地基** · **阶段1 落地页+法务页**(已部署 globalrouterai.com)
+- [x] **阶段2 网关** — 代理层/流式 SSE/故障降级 503。**渠道配置待 VPS**
+- [x] **阶段3 认证 + Key 管理** — scrypt/jose 会话/自签发 key
+- [x] **阶段4 支付** — 幂等入账/充值页/交易记录。**待 NexaPay 文档**
+- [x] **阶段5 用量看板 + 运营后台** `/ops-2f8a`
+- [x] **阶段6 Status 页 + 渠道探测 + 余额监控**
+
+### 验证脚本(改完代码跑一遍)
+
+| 命令 | 验什么 |
+|---|---|
+| `npm run check:pricing` | 上游进货价 + 官方 list 价有没有漂移 |
+| `npm run verify:idem` | 并发重复回调只加一次钱 |
+| `npm run verify:auth` | 密码哈希 / 会话签名 / 注册约束 |
+| `npm run verify:newapi` | 对真实 new-api 实例联调 |
+| `npm run verify:gateway` | 网关 12 项(鉴权/降级/流式/计费精度/key 生命周期) |
+
+### ⬜ 还没做 / 被外部条件卡住
+
+| 事项 | 卡在哪 |
+|---|---|
+| 邮箱验证 + 送 $1 | 没有邮件服务;且**送不送 $1 两份文档打架,待你拍板** |
+| Google OAuth | 没有 GOOGLE_CLIENT_ID |
+| `ops/upstream-verify/` 三个脚本 | 需要上游 key 才能测注入/缓存 |
+| 记录请求实际走的分组 | 需确认 new-api 能否在响应头透出渠道 |
+| `logs.ts` 字段核对 | 需要真实流量 |
+| 限流换 Redis/Postgres | 内存版在 Vercel 多实例下会被绕过 |
+
+### 🔴 上线前你必须亲自做的
+
+1. **买美西 VPS** + 部署 new-api + 配 3 个渠道
+2. **开 Supabase/Neon**,把 `DATABASE_URL` 换掉
+3. **new-api 后台确认合规条款** —— 不做的话用户付了钱加不上额度
+4. **建服务令牌**填进 `NEWAPI_SERVICE_KEY`(接口拿不到明文,只能手工复制)
+5. **拿 NexaPay 文档**,核对 `nexapay.ts` 的 ENDPOINTS / FIELDS
+6. **部署修复后的 sonnet-5 价格** —— 线上仍在展示作废的 $3/$15
+7. 配 `TELEGRAM_BOT_TOKEN` / `CHAT_ID`,否则告警只进日志
+
+### 本地开发环境
+
+```bash
+docker start ai-gw-pg new-api     # Postgres :55432 · new-api :3001
+npm run dev                        # :3000
+npm run mock:upstream              # 假上游 :3099,测代理用
+```

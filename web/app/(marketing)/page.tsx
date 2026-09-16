@@ -2,14 +2,18 @@ import Link from 'next/link'
 import { site } from '@/lib/site'
 import { CodeBlock } from '@/components/marketing/code-block'
 import { pricingRows, savingsPct, fmtPrice } from '@/lib/pricing/calculate'
-import { env } from '@/lib/env'
 
-const HOUR_LIST = 4.65 // Sonnet 5 高强度使用 1 小时的 list price 成本
 
-export default function Home() {
-  const rows = pricingRows()
+// Sonnet 5 高强度使用 1 小时的 list price 成本。
+// 按真实 list 价 $2/$10 算;旧值 $4.65 是基于被取消的 $3/$15 涨价,已作废。
+const HOUR_LIST = 3.1
+
+export default async function Home() {
+  const rows = await pricingRows()
   const featured = rows.filter((r) => ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5'].includes(r.id))
-  const hourOurs = HOUR_LIST * env.PRICE_RATIO_OF_OFFICIAL
+  // 这一段讲的是 Sonnet 5,倍率取它自己身上的(注册表已挂好)
+  const claudeRatio = rows.find((r) => r.group === 'claude')?.ratio ?? 0.8
+  const hourOurs = HOUR_LIST * claudeRatio
 
   return (
     <>
@@ -20,9 +24,9 @@ export default function Home() {
         </p>
         <h1 className="max-w-3xl text-4xl font-semibold leading-[1.15] tracking-tight sm:text-5xl">
           Run your coding agent for{' '}
-          <span className="text-[var(--accent)]">{savingsPct()}% less.</span>
+          <span className="text-[var(--accent)]">{savingsPct(claudeRatio)}% less.</span>
         </h1>
-        <p className="mt-5 max-w-2xl text-[17px] leading-7 text-[var(--muted)]">
+        <p className="mt-5 max-w-2xl text-[18px] leading-7 text-[var(--muted)]">
           A drop-in API gateway for Claude Code, Cursor, and Cline. Change one environment
           variable — streaming, tool calls, and prompt caching all keep working. Prepaid
           credits, no subscription, no monthly minimum.
@@ -36,7 +40,7 @@ export default function Home() {
         </div>
 
         <div className="mt-5 max-w-2xl rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3">
-          <p className="text-[13px] leading-6 text-[var(--muted)]">
+          <p className="text-[14px] leading-6 text-[var(--muted)]">
             Independent third-party gateway — not affiliated with Anthropic. Model behavior can
             differ from a first-party API.{' '}
             <Link href="/docs#differences" className="underline underline-offset-2 hover:text-[var(--fg)]">
@@ -67,7 +71,7 @@ export default function Home() {
           <h2 className="text-sm font-medium tracking-wide text-[var(--muted)]">
             WHAT AN HOUR ACTUALLY COSTS
           </h2>
-          <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[var(--muted)]">
+          <p className="mt-3 max-w-2xl text-[16px] leading-7 text-[var(--muted)]">
             A heavy hour of agent work on Claude Sonnet 5 — roughly 100 requests, each
             re-reading a large cached system prompt.
           </p>
@@ -106,7 +110,7 @@ export default function Home() {
             },
           ].map((f) => (
             <div key={f.t}>
-              <h3 className="text-[15px] font-semibold">{f.t}</h3>
+              <h3 className="text-[16px] font-semibold">{f.t}</h3>
               <p className="mt-2.5 text-sm leading-6 text-[var(--muted)]">{f.d}</p>
             </div>
           ))}
@@ -131,7 +135,7 @@ export default function Home() {
                   <td className="px-4 py-3.5">
                     <span className="font-medium">{m.displayName}</span>
                     {m.recommended && (
-                      <span className="ml-2 rounded bg-[var(--accent)]/12 px-1.5 py-0.5 font-mono text-[10px] text-[var(--accent)]">
+                      <span className="ml-2 rounded bg-[var(--accent)]/12 px-1.5 py-0.5 font-mono text-[12px] text-[var(--accent)]">
                         RECOMMENDED
                       </span>
                     )}

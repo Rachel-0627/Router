@@ -1,22 +1,22 @@
 import { site } from '@/lib/site'
 import { CodeBlock } from '@/components/marketing/code-block'
-import { MODELS } from '@/lib/pricing/models'
+import { getModelsForDisplay } from '@/lib/pricing/registry'
 
 export const metadata = { title: `Docs — ${site.name}` }
 
 const B = site.apiBaseUrl
 
-export default function Docs() {
+export default async function Docs() {
   return (
     <div className="mx-auto max-w-3xl px-5 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">Getting started</h1>
-      <p className="mt-4 text-[15px] leading-7 text-[var(--muted)]">
+      <p className="mt-4 text-[16px] leading-7 text-[var(--muted)]">
         {site.name} speaks the native Anthropic Messages API and an OpenAI-compatible
         endpoint. In most tools you only change a base URL and an API key.
       </p>
 
       <Section title="1. Create an API key">
-        <p className="text-[15px] leading-7 text-[var(--muted)]">
+        <p className="text-[16px] leading-7 text-[var(--muted)]">
           Sign up, then create a key from your dashboard. You can name each key, set a daily
           spend cap, and disable it at any time.
         </p>
@@ -76,9 +76,9 @@ export default function Docs() {
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           <table className="w-full text-sm">
             <tbody>
-              {MODELS.map((m) => (
+              {(await getModelsForDisplay()).map((m) => (
                 <tr key={m.id} className="border-b border-[var(--border)] last:border-0">
-                  <td className="px-4 py-3 font-mono text-[13px]">{m.id}</td>
+                  <td className="px-4 py-3 font-mono text-[14px]">{m.id}</td>
                   <td className="px-4 py-3 text-right text-[var(--muted)]">{m.displayName}</td>
                 </tr>
               ))}
@@ -152,13 +152,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 const H3 = ({ children }: { children: React.ReactNode }) => (
-  <h3 className="mt-7 mb-2.5 text-[15px] font-semibold">{children}</h3>
+  <h3 className="mt-7 mb-2.5 text-[16px] font-semibold">{children}</h3>
 )
 const P = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-[15px] leading-7 text-[var(--muted)]">{children}</p>
+  <p className="text-[16px] leading-7 text-[var(--muted)]">{children}</p>
 )
 const Code = ({ children }: { children: React.ReactNode }) => (
-  <code className="rounded bg-[var(--card)] px-1.5 py-0.5 font-mono text-[13px] text-[var(--fg)]">
+  <code className="rounded bg-[var(--card)] px-1.5 py-0.5 font-mono text-[14px] text-[var(--fg)]">
     {children}
   </code>
 )
