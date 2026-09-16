@@ -10,14 +10,29 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "check:pricing": "tsx --env-file=.env.local ops/check-pricing.ts",
+    "verify:idem": "tsx --env-file=.env.local ops/verify-idempotency.ts",
+    "verify:newapi": "tsx --env-file=.env.local ops/verify-newapi.ts",
+    "verify:auth": "tsx --env-file=.env.local ops/verify-auth.ts",
+    "mock:upstream": "node ops/mock-upstream.mjs",
+    "verify:gateway": "tsx --env-file=.env.local ops/verify-gateway.ts",
+    "ops:health": "tsx --env-file=.env.local ops/channel-health.ts",
+    "ops:balance": "tsx --env-file=.env.local ops/balance-monitor.ts",
+    "seed:models": "tsx --env-file=.env.local ops/seed-models.ts",
+    "ops:grant": "tsx --env-file=.env.local ops/grant-admin.ts",
+    "seed:groups": "tsx --env-file=.env.local ops/seed-group-settings.ts",
+    "creem:setup": "tsx --env-file=.env.local ops/creem-setup.ts",
+    "verify:creem": "tsx --env-file=.env.local ops/verify-creem.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.12",
     "next": "16.3.1",
     "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
