@@ -4,9 +4,11 @@
  */
 export const site = {
   name: 'GlobalRouter',
-  tagline: 'Run your coding agent for 60% less',
+  // ⚠️ 不要在这里写死折扣百分比 —— 倍率是按分组配置的,写死会和实际价格对不上,
+  //    那是虚假宣传。要显示折扣就调 savingsPct(groupId) 动态算。
+  tagline: 'Run your coding agent for less',
   description:
-    'A drop-in API gateway for Claude Code, Cursor, and Cline. Prepaid credits, full prompt caching support, and bills around 60% below list price.',
+    'A drop-in API gateway for Claude Code, Cursor, and Cline. Prepaid credits, full prompt caching support, and billing below list price.',
 
   domain: 'globalrouterai.com',
   url: 'https://globalrouterai.com',
