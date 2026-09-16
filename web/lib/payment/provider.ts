@@ -58,6 +58,17 @@ export interface PaymentProvider {
    * 返回 null 表示这个 webhook 无法识别,应当忽略。
    */
   parseWebhookExternalId(body: unknown, headers: Headers): string | null
+
+  /**
+   * 验证 webhook 签名。支付商支持签名的**必须**实现。
+   *
+   * ⚠️ 参数是**原始请求体字符串**,不是解析后的对象 ——
+   *    HMAC 算的是原始字节,JSON.parse 再 stringify 会改变空格和键序,签名必然对不上。
+   *
+   * 不实现(返回 undefined)表示该支付商不提供签名,
+   * 此时只能靠回调地址里的路径密钥 + 回查校验兜底。
+   */
+  verifyWebhookSignature?(rawBody: string, headers: Headers): boolean
 }
 
 /** 支付商返回的数据不可信,统一用这个函数收敛异常 */

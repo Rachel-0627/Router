@@ -4,11 +4,13 @@
  */
 import { env } from '../env'
 import { nexapay } from './nexapay'
+import { creem } from './creem'
 import type { PaymentProvider } from './provider'
 
 const PROVIDERS: Record<string, PaymentProvider> = {
+  creem,
   nexapay,
-  // creem / paddle 待接入时在这里注册
+  // paddle 待接入时在这里注册
 }
 
 export function getProvider(name?: string): PaymentProvider {

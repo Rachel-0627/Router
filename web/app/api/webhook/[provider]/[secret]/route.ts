@@ -6,9 +6,14 @@
  *   路径里加一段随机串,相当于给回调地址上了一把锁。
  *   但这只是第一道门 —— 真正的保障是 settlePayment() 里的回查校验。
  *
+ * 三道门:
+ *   1. 路径里的随机密钥  —— 挡住猜地址的
+ *   2. HMAC 签名验证     —— 支付商支持的话(Creem 支持)
+ *   3. 回查支付商 API    —— 最终以回查结果为准,webhook 内容一律不信
+ *
  * 返回码语义(决定支付商会不会重试):
  *   200  已处理(含「早就处理过了」)→ 不要重试
- *   401  secret 不对 → 不要重试
+ *   401  secret 或签名不对 → 不要重试
  *   400  读不出订单号 → 不要重试
  *   500  临时故障 → 请重试
  */
@@ -41,10 +46,22 @@ export async function POST(
     return NextResponse.json({ ok: false }, { status: 404 })
   }
 
+  // ⚠️ 必须先拿**原始字符串**:HMAC 算的是原始字节,
+  //    先 JSON.parse 再 stringify 会改变空格和键序,签名一定对不上。
+  const rawBody = await req.text()
+
+  // 第二道门:签名验证(支付商支持的话)
+  if (provider.verifyWebhookSignature) {
+    if (!provider.verifyWebhookSignature(rawBody, req.headers)) {
+      logger.warn('webhook 签名验证失败,已拒绝', { provider: providerName })
+      return NextResponse.json({ ok: false, reason: 'bad_signature' }, { status: 401 })
+    }
+  }
+
   // 只解析订单号,body 里其他字段一律不采信
   let body: unknown
   try {
-    body = await req.json()
+    body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ ok: false, reason: 'invalid_json' }, { status: 400 })
   }
