@@ -26,6 +26,8 @@ export const users = pgTable(
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     newapiUserId: integer('newapi_user_id'),        // new-api 里对应的用户 ID
     status: text('status').notNull().default('active'), // active | suspended
+    /** user | admin。admin 才能进 /ops-2f8a,用 npm run ops:grant <邮箱> 授权 */
+    role: text('role').notNull().default('user'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -77,14 +79,26 @@ export const apiKeys = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     userId: uuid('user_id').notNull().references(() => users.id),
     name: text('name').notNull(),
+    /**
+     * 产品分组:'claude' | 'codex'。决定这把 key 能调哪些模型、
+     * 走哪个上游服务令牌、按哪个倍率计价。见 lib/pricing/groups.ts
+     */
+    productGroup: text('product_group').notNull().default('claude'),
+    // A 方案下不再给每个用户在 new-api 开 token,此列保留但不用
     newapiTokenId: integer('newapi_token_id'),
-    keyPrefix: text('key_prefix'),                   // 如 sk-ab12...yz89
+    // ⚠️ 明文 key 只在创建时返回给用户一次,库里只存 SHA-256
+    keyHash: text('key_hash').notNull(),
+    keyPrefix: text('key_prefix'),                   // 如 sk-gr-ab12...yz89
     dailyLimitMicroUsd: money('daily_limit_micro_usd'), // 空 = 不限
     status: text('status').notNull().default('active'), // active | disabled
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   },
-  (t) => [index('api_keys_user_idx').on(t.userId)],
+  (t) => [
+    index('api_keys_user_idx').on(t.userId),
+    // 每次网关请求都按哈希查 key,必须有唯一索引
+    uniqueIndex('api_keys_hash_uq').on(t.keyHash),
+  ],
 )
 
 /** 每日用量汇总 —— 从 new-api 日志聚合而来,只存 token 数,不存内容 */
@@ -106,8 +120,42 @@ export const usageDaily = pgTable(
   (t) => [uniqueIndex('usage_daily_uq').on(t.userId, t.day, t.model)],
 )
 
+/**
+ * 渠道探测记录 —— Status 页和 24h 可用率的数据源。
+ *
+ * 为什么要自己存一份而不是直接读 new-api:
+ *   new-api 只保留渠道的**当前**状态,没有历史。
+ *   但"过去 24 小时可用率"才是用户真正关心的 —— 号池会周期性炸,
+ *   只显示"此刻正常"会掩盖一天挂了六次的事实。
+ *
+ * 只追加,不修改。定期清理旧数据(保留 30 天足够)。
+ */
+export const channelProbes = pgTable(
+  'channel_probes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+    /** new-api 里的渠道 id */
+    channelId: integer('channel_id').notNull(),
+    channelName: text('channel_name').notNull(),
+    /** 上游分组名,如 VIP / 默认分组 */
+    upstreamGroup: text('upstream_group'),
+    model: text('model'),
+    ok: text('ok').notNull(),              // 'up' | 'down'
+    latencyMs: integer('latency_ms'),
+    /** 失败原因,只存短码不存完整堆栈 */
+    errorCode: text('error_code'),
+  },
+  (t) => [index('probes_time_idx').on(t.checkedAt), index('probes_channel_idx').on(t.channelId, t.checkedAt)],
+)
+
+export type ChannelProbe = typeof channelProbes.$inferSelect
 export type User = typeof users.$inferSelect
 export type Order = typeof orders.$inferSelect
 export type LedgerEntry = typeof creditLedger.$inferSelect
 export type ApiKey = typeof apiKeys.$inferSelect
 export type UsageDaily = typeof usageDaily.$inferSelect
+
+// 模型目录单独一个文件(本文件已接近 200 行上限),在这里再导出一次,
+// 这样 import { models } from './'"db/schema"' 仍然可用。
+export { models, productGroupSettings, type ModelRow, type NewModelRow, type GroupSettingRow } from './schema-models'
