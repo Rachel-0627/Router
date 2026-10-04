@@ -40,13 +40,21 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
 
   // ⚠️ 必须用 upstreamId,不是我们对外的 id —— 两者并不总是相同
   //    (如 claude-haiku-4-5 对应上游 claude-haiku-4-5-20251001)。
-  //    发错名字上游会回 503「无可用渠道」,看起来像上游故障,其实是我们填错了。
-  let model: string
+  //
+  // 试**多个**模型而不是只试一个:只试一个时,"这把 key 没权限"和
+  // "这个模型名写错了"会给出一模一样的 503,根本分不开。
+  // 多试几个,只要有一个通,就说明 key 是好的、问题出在那个模型名上。
+  let candidates: { id: string; upstreamId: string }[]
   try {
     const all = await getModels()
-    const pick = all.filter((m) => m.group === group).sort((a, b) => a.listPrice.input - b.listPrice.input)[0]
-    if (!pick) return { ok: false, message: `${group} 组还没有在售模型,先去模型目录上架一个。` }
-    model = pick.upstreamId
+    candidates = all
+      .filter((m) => m.group === group)
+      .sort((a, b) => a.listPrice.input - b.listPrice.input)
+      .slice(0, 3)
+      .map((m) => ({ id: m.id, upstreamId: m.upstreamId }))
+    if (candidates.length === 0) {
+      return { ok: false, message: `${group} 组还没有在售模型,先去模型目录上架一个。` }
+    }
   } catch {
     return { ok: false, message: '读不到模型目录,稍后重试。' }
   }
@@ -54,47 +62,57 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
   // Claude 走 Anthropic 格式,GPT 走 OpenAI 格式 —— 发错格式上游一样会报错
   const isClaude = group === 'claude'
   const path = isClaude ? '/v1/messages' : '/v1/chat/completions'
-  // 两种格式在这个最小请求上恰好同形,所以 body 只有一份;
-  // 差别在路径和 anthropic-version 头上。
-  const body = { model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }
+  const url = `${base.replace(/\/$/, '')}${path}`
 
-  try {
-    const res = await fetch(`${base.replace(/\/$/, '')}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-        ...(isClaude ? { 'anthropic-version': '2023-06-01' } : {}),
-      },
-      // 最小请求:1 个 token,花掉的钱可以忽略
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
-    })
+  const results: { model: string; status: number | null; detail: string }[] = []
 
-    if (res.ok) return { ok: true, message: `通了。上游接受了 ${model}。` }
+  for (const c of candidates) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`,
+          ...(isClaude ? { 'anthropic-version': '2023-06-01' } : {}),
+        },
+        // 最小请求:1 个 token,花掉的钱可以忽略
+        body: JSON.stringify({ model: c.upstreamId, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+        signal: AbortSignal.timeout(20_000),
+      })
 
-    // ⚠️ 把上游**原话**带出来。只说"上游故障"会把真正的原因盖掉 ——
-    //    503 在 new-api 系里最常见的含义其实是"这个模型没有可用渠道",
-    //    那是配置问题,不是故障,但不看原文根本分不出来。
-    const raw = await res.text().catch(() => '')
-    const detail = raw.replace(/\s+/g, ' ').slice(0, 200)
-    const status = res.status
+      if (res.ok) {
+        const others = results.length
+        logger.info('上游连通性测试通过', { group, model: c.upstreamId, failedBefore: others })
+        return {
+          ok: true,
+          message:
+            others === 0
+              ? `通了。上游接受了 ${c.upstreamId}。`
+              : `通了(${c.upstreamId})。但前 ${others} 个模型没过 —— key 是好的,是那几个模型名或渠道有问题:${results.map((r) => r.model).join('、')}`,
+        }
+      }
 
-    const hint =
-      status === 401 || status === 403
-        ? 'key 不对,或这把 key 没有该分组的权限。'
-        : status === 404
-          ? '地址填错了,或上游没有这个模型。'
-          : status === 429
-            ? '上游限流,过会儿再试。'
-            : status >= 500
-              ? `上游没接住 ${model}。常见原因是这把 key 所在的分组里没有该模型的渠道 —— 不一定是故障。`
-              : ''
+      const raw = await res.text().catch(() => '')
+      results.push({ model: c.upstreamId, status: res.status, detail: raw.replace(/\s+/g, ' ').slice(0, 120) })
 
-    logger.error('上游连通性测试未通过', { group, model, status, detail })
-    return { ok: false, message: `上游返回 ${status}。${hint}${detail ? ` 上游原话:${detail}` : ''}` }
-  } catch (e) {
-    logger.error('上游连通性测试失败', { group, model, detail: e instanceof Error ? e.message : String(e) })
-    return { ok: false, message: '连不上上游 —— 检查地址拼写,或上游正好不可用。' }
+      // key 本身不对就没必要再试别的了,结论已经确定
+      if (res.status === 401 || res.status === 403) break
+    } catch (e) {
+      results.push({ model: c.upstreamId, status: null, detail: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
+  logger.error('上游连通性测试:全部候选都未通过', { group, results })
+
+  const first = results[0]
+  const allAuth = results.every((r) => r.status === 401 || r.status === 403)
+  const hint = allAuth
+    ? 'key 不对,或这把 key 没有该分组的权限。'
+    : `这 ${results.length} 个模型在这把 key 的分组里都没有可用渠道。要么这把 key 绑错了分组,要么上游对这些模型名的叫法和我们不一样。`
+
+  const lines = results.map((r) => `${r.model}=${r.status ?? '连不上'}`).join(' · ')
+  return {
+    ok: false,
+    message: `都没通。${hint} 试过:${lines}。上游原话:${first?.detail ?? ''}`,
   }
 }
