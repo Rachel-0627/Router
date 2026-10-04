@@ -6,6 +6,7 @@ const NAV = [
   { href: '/ops-2f8a/models', label: '模型目录' },
   { href: '/ops-2f8a/pricing', label: '定价倍率' },
   { href: '/ops-2f8a/users', label: '用户' },
+  { href: '/ops-2f8a/credentials', label: '密钥配置' },
 ]
 
 /** 门禁和导航都收在布局里,子页面不用各自判断 */

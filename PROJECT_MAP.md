@@ -76,19 +76,31 @@ ai-gateway/
 │   │   │       └── billing/           充值 + 交易记录            ✅
 │   │   │
 │   │   ├── (ops)/                 ── 运营后台(只有你能看) ── ✅
-│   │   │   └── ops-2f8a/              资金安全/经营/用户/订单     ✅
-│   │   │                              独立口令 + 独立 audience,
-│   │   │                              用户会话冒充不进来
+│   │   │   └── ops-2f8a/              总览/模型/定价/用户/密钥    ✅
+│   │   │       │                      门禁:账号 role=admin 才进,
+│   │   │       │                      授权只能命令行 ops:grant ——
+│   │   │       │                      网页提权入口本身就是漏洞温床
+│   │   │       └── credentials/       密钥配置(加密存库,存完即生效) ✅
 │   │   │
 │   │   └── api/                   ── 服务端接口(BFF) ──
 │   │       │  (认证/Key/充值都用 Server Action,不走 REST,少一层)
 │   │       │   app/actions/auth.ts     注册/登录/登出            ✅
 │   │       │   app/actions/keys.ts     Key 增删改禁              ✅
 │   │       │   app/actions/billing.ts  发起充值                  ✅
+│   │       │   app/actions/ops-secrets.ts 密钥存取/测连通/轮换    ✅
 │   │       └── webhook/
 │   │           └── [provider]/[secret]/  支付回调(路径带密钥+回查校验) ✅
 │   │
 │   ├── lib/
+│   │   ├── secrets/               运维密钥:加密存库,保存即生效   ✅
+│   │   │   ├── slots.ts               能填哪些槽位(名字=环境变量名) ✅
+│   │   │   ├── crypto.ts              AES-256-GCM 加解密         ✅
+│   │   │   ├── keys.ts                KEK 管理,用指纹而非版本号   ✅
+│   │   │   └── store.ts               读写+60秒缓存+环境变量兜底  ✅
+│   │   │                              ⚠️ KEK 放环境变量,**故意不进库**
+│   │   │                                 ——钥匙进库=挂在锁上
+│   │   │                              ⚠️ KEK 与 AUTH_SECRET 分家:
+│   │   │                                 换登录密钥不该毁掉上游 key
 │   │   ├── newapi/                new-api 管理 API 封装(基于实测,非猜测) ✅
 │   │   │   ├── client.ts              JWT 登录+缓存/超时/重试     ✅
 │   │   │   ├── users.ts               建用户/查余额/加额度        ✅
@@ -156,6 +168,10 @@ ai-gateway/
 │       │   │                          主动披露缺点换信任 ——
 │       │   │                          八折下价格优势不足以单独成立
 │       │   └── legal-page.tsx         法务页排版                ✅
+│       ├── ops/                   运营后台组件
+│       │   ├── secret-form.tsx        密钥填写框(只显尾号,不回显明文) ✅
+│       │   ├── upstream-test.tsx      上游连通性实测按钮         ✅
+│       │   └── kek-panel.tsx          加密密钥状态 + 轮换向导    ✅
 │       └── dashboard/             控制台组件
 │
 └── ops/                           (已并入 web/ops/ —— 这些脚本都要读 app 代码,

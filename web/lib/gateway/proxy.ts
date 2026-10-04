@@ -21,6 +21,7 @@ import { getModelById } from '../pricing/registry'
 import { getGroup } from '../pricing/groups'
 import type { ProductGroupId } from '../pricing/types'
 import { SseUsageCollector, usageFromJson } from './usage'
+import { getSecret } from '../secrets/store'
 
 /** 每个 key 每分钟最多多少次请求 */
 const RPM_PER_KEY = 120
@@ -35,11 +36,15 @@ function apiError(status: number, type: string, message: string, extraHeaders?: 
 }
 
 /**
- * 按产品分组选服务令牌。令牌上绑的 new-api 分组决定往哪批渠道路由。
+ * 按产品分组选服务令牌。令牌上绑的上游分组决定往哪批渠道路由。
+ *
+ * 取值顺序:后台填的(数据库) → 环境变量。
+ * getSecret 自己就带这个兜底,所以这里只管挑槽位。
  * 没配分组专属的就退回通用令牌 —— 单分组起步时不用配两份。
  */
-function serviceKeyFor(group: ProductGroupId): string | undefined {
-  const byGroup = group === 'codex' ? env.NEWAPI_SERVICE_KEY_CODEX : env.NEWAPI_SERVICE_KEY_CLAUDE
+async function serviceKeyFor(group: ProductGroupId): Promise<string | undefined> {
+  const slot = group === 'codex' ? 'NEWAPI_SERVICE_KEY_CODEX' : 'NEWAPI_SERVICE_KEY_CLAUDE'
+  const byGroup = await getSecret(slot)
   return byGroup || env.NEWAPI_SERVICE_KEY || undefined
 }
 
@@ -115,13 +120,16 @@ export async function handleProxy(req: Request, upstreamPath: string): Promise<R
     return apiError(403, 'permission_error', `The ${getGroup(keyGroup)?.displayName ?? keyGroup} group is not available yet.`)
   }
 
-  const serviceKey = serviceKeyFor(keyGroup)
-  if (!env.NEWAPI_BASE_URL || !serviceKey) {
-    logger.error('网关未配置:缺 NEWAPI_BASE_URL 或该分组的服务令牌', { group: keyGroup })
+  const [serviceKey, baseUrl] = await Promise.all([
+    serviceKeyFor(keyGroup),
+    getSecret('NEWAPI_BASE_URL'),
+  ])
+  if (!baseUrl || !serviceKey) {
+    logger.error('网关未配置:缺上游地址或该分组的服务令牌', { group: keyGroup })
     return apiError(503, 'api_error', 'The gateway is not available right now.', { 'Retry-After': '30' })
   }
 
-  const target = `${env.NEWAPI_BASE_URL.replace(/\/$/, '')}${upstreamPath}`
+  const target = `${baseUrl.replace(/\/$/, '')}${upstreamPath}`
   let upstream: Response
   try {
     upstream = await fetch(target, {

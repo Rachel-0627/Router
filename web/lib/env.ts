@@ -46,6 +46,19 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
+  // ---- 运维密钥加密(SECRETS_KEK)----
+  // 后台填写的上游 key / 支付 key 用它加密后存库。生成: openssl rand -base64 32
+  //
+  // ⚠️ **不要**复用 AUTH_SECRET。那把是签登录凭证的,怀疑会话泄露时应该
+  //    随时能换;两者绑一起会导致"换登录密钥 = 毁掉所有上游 key",
+  //    结果就是你不敢做本该做的安全操作。
+  //
+  // ⚠️ 这把钥匙丢了,库里的密钥全部解不开,只能重填一次。值得单独备份。
+  //    (真丢了也不会停摆 —— 下面的环境变量兜底路径仍然有效。)
+  SECRETS_KEK: z.string().optional(),
+  // 轮换期间临时存放上一把 KEK,让旧密文还能解开。轮换完请删掉。
+  SECRETS_KEK_OLD: z.string().optional(),
+
   // ---- 阶段4 支付(现在可空) ----
   /** 主力通道 */
   PAYMENT_PROVIDER: z.enum(['nexapay', 'creem', 'paddle']).default('nexapay'),
@@ -89,4 +102,6 @@ export const featureReady = {
   creem: () => Boolean(env.CREEM_API_KEY && env.CREEM_WEBHOOK_SECRET),
   paddle: () => Boolean(env.PADDLE_API_KEY && env.PADDLE_WEBHOOK_SECRET),
   alert: () => Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
+  /** 配了 KEK 才能在后台存密钥;没配就只能走环境变量 */
+  secrets: () => Boolean(env.SECRETS_KEK),
 }

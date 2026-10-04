@@ -159,3 +159,5 @@ export type UsageDaily = typeof usageDaily.$inferSelect
 // 模型目录单独一个文件(本文件已接近 200 行上限),在这里再导出一次,
 // 这样 import { models } from './'"db/schema"' 仍然可用。
 export { models, productGroupSettings, type ModelRow, type NewModelRow, type GroupSettingRow } from './schema-models'
+// 运维密钥(上游 key / 支付 key)也单独一个文件,原因同上。
+export { appSecrets, type AppSecretRow } from './schema-secrets'
