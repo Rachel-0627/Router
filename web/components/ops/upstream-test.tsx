@@ -4,7 +4,8 @@
  * 填完当场知道通不通,不用等真实用户来踩雷。
  */
 import { useActionState } from 'react'
-import { testUpstream, type SecretState } from '@/app/actions/ops-secrets'
+import { testUpstream } from '@/app/actions/ops-upstream-test'
+import { type SecretState } from '@/app/actions/ops-secrets'
 
 export function UpstreamTest({ group, label }: { group: 'claude' | 'codex'; label: string }) {
   const [state, action, pending] = useActionState<SecretState, FormData>(testUpstream, undefined)

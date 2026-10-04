@@ -86,58 +86,6 @@ export async function removeSecret(_prev: SecretState, form: FormData): Promise<
   return { ok: true, message: '已删除。该槽位会退回读环境变量。' }
 }
 
-/**
- * 测试上游连通性 —— 用当前配置真发一个最小请求。
- * 填完当场知道通不通,不用等真实用户来踩雷。
- */
-export async function testUpstream(_prev: SecretState, form: FormData): Promise<SecretState> {
-  try {
-    await requireAdmin()
-  } catch {
-    return { ok: false, message: '需要管理员权限' }
-  }
-
-  const group = (form.get('group') ?? 'claude').toString()
-  const base = await getSecret('NEWAPI_BASE_URL')
-  if (!base) return { ok: false, message: '先填上游地址' }
-
-  const keySlot = group === 'codex' ? 'NEWAPI_SERVICE_KEY_CODEX' : 'NEWAPI_SERVICE_KEY_CLAUDE'
-  const key = await getSecret(keySlot as SlotName)
-  if (!key) return { ok: false, message: `先填${group === 'codex' ? ' Codex ' : ' Claude '}组的 key` }
-
-  const model = group === 'codex' ? 'gpt-5.6-terra' : 'claude-haiku-4-5'
-  try {
-    const res = await fetch(`${base.replace(/\/$/, '')}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-        'anthropic-version': '2023-06-01',
-      },
-      // 最小请求:1 个 token,花掉的钱可以忽略
-      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
-      signal: AbortSignal.timeout(20_000),
-    })
-
-    if (res.ok) return { ok: true, message: `通了。上游接受了 ${model} 的请求。` }
-
-    const status = res.status
-    if (status === 401 || status === 403) {
-      return { ok: false, message: `上游拒绝(${status})—— key 不对,或这把 key 没有该分组的权限。` }
-    }
-    if (status === 404) {
-      return { ok: false, message: `上游说模型 ${model} 不存在(404)—— 地址可能填错了。` }
-    }
-    if (status >= 500) {
-      return { ok: false, message: `上游暂时故障(${status})。key 可能是对的,过会儿再试。` }
-    }
-    return { ok: false, message: `上游返回 ${status}。` }
-  } catch (e) {
-    logger.error('上游连通性测试失败', { group, detail: e instanceof Error ? e.message : String(e) })
-    return { ok: false, message: '连不上上游 —— 检查地址拼写,或上游正好不可用。' }
-  }
-}
-
 /** 轮换向导第 2 步:把旧钥匙加密的条目换成当前钥匙 */
 export async function rotateReencrypt(_prev: SecretState, _form: FormData): Promise<SecretState> {
   let userId: string
