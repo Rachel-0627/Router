@@ -12,7 +12,11 @@ export const site = {
 
   domain: 'globalrouterai.com',
   url: 'https://globalrouterai.com',
-  apiBaseUrl: 'https://api.globalrouterai.com',
+  // ⚠️ 用主域,不要写 api. 子域 —— 那个子域没有 DNS 记录,
+  //    用户照着首页复制会直接撞 DNS 解析失败(看起来像"这站是假的")。
+  //    网关路由 /v1/messages 和 /v1/chat/completions 就挂在主站上。
+  //    将来真要拆独立子域:先在 DNS 加 CNAME + Vercel 项目里登记,通了再改这里。
+  apiBaseUrl: 'https://globalrouterai.com',
 
   supportEmail: 'support@globalrouterai.com',
   legalEntity: 'GlobalRouter',           // 主体注册后替换成公司名
