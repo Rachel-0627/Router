@@ -48,7 +48,7 @@ ai-gateway/
 │   ├── drizzle/                   建表 SQL(自动生成)         ✅
 │   ├── app/
 │   │   ├── (marketing)/           ── 公开页面 ──
-│   │   │   ├── page.tsx               落地页                      ✅
+│   │   │   ├── page.tsx               落地页(八折定位:省心+透明) ✅
 │   │   │   ├── pricing/               定价页(逐模型 ours/list 对比) ✅
 │   │   │   ├── docs/page.tsx          接入文档(CC/Cursor/SDK 同一页) ✅
 │   │   │   │                          内容多了再拆子页,现在没必要
@@ -152,6 +152,9 @@ ai-gateway/
 │       │   ├── nav.tsx                导航                      ✅
 │       │   ├── footer.tsx             页脚(含合规披露)          ✅
 │       │   ├── code-block.tsx         代码块(可复制)            ✅
+│       │   ├── straight-answers.tsx   落地页「坦白讲」板块       ✅
+│       │   │                          主动披露缺点换信任 ——
+│       │   │                          八折下价格优势不足以单独成立
 │       │   └── legal-page.tsx         法务页排版                ✅
 │       └── dashboard/             控制台组件
 │
