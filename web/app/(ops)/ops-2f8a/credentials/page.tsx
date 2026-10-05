@@ -7,6 +7,7 @@ import { SecretForm, type SlotView } from '@/components/ops/secret-form'
 import { UpstreamForm, type UpstreamView } from '@/components/ops/upstream-form'
 import { UpstreamTest } from '@/components/ops/upstream-test'
 import { UpstreamModels } from '@/components/ops/upstream-models'
+import { InjectionTest } from '@/components/ops/injection-test'
 import { KekPanel } from '@/components/ops/kek-panel'
 
 export const metadata = { title: 'ops · credentials', robots: { index: false, follow: false } }
@@ -122,6 +123,7 @@ export default async function OpsCredentials() {
       <div className="mt-4 space-y-4">
         <UpstreamModels keys={testKeys} />
         <UpstreamTest keys={testKeys} />
+        <InjectionTest keys={testKeys} />
       </div>
 
       <h2 className="mt-12 text-lg font-semibold">兜底与支付</h2>
