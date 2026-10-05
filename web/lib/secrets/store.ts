@@ -37,9 +37,12 @@ export function invalidateSecretCache() {
 
 /**
  * 取明文。查不到返回 undefined(调用方自己决定是报错还是降级)。
+ *
+ * ⚠️ 槽位名收 string 而不是联合类型:产品分组是用户自定义的,
+ *    每个分组一个密钥槽位,名单在运行时才知道。合法性由调用方校验。
  * 解不开的密文记一条日志但**不抛错** —— 退回环境变量比整个网关挂掉好。
  */
-export async function getSecret(slot: SlotName): Promise<string | undefined> {
+export async function getSecret(slot: string): Promise<string | undefined> {
   const hit = cache.get(slot)
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value
 
@@ -70,7 +73,7 @@ export async function getSecret(slot: SlotName): Promise<string | undefined> {
  * 写入。加密后**立刻解回来比对**,不一致就拒绝保存 ——
  * 宁可现在报错,也不要三个月后要用时才发现存的是一堆解不开的乱码。
  */
-export async function setSecret(slot: SlotName, plaintext: string, userId: string): Promise<void> {
+export async function setSecret(slot: string, plaintext: string, userId: string): Promise<void> {
   const key = currentKek()
   const ciphertext = encrypt(plaintext, key)
   if (decrypt(ciphertext, key) !== plaintext) {
@@ -91,7 +94,7 @@ export async function setSecret(slot: SlotName, plaintext: string, userId: strin
   logger.info('密钥已更新', { slot, last4: row.last4, by: userId })
 }
 
-export async function deleteSecret(slot: SlotName, userId: string): Promise<void> {
+export async function deleteSecret(slot: string, userId: string): Promise<void> {
   await db.delete(appSecrets).where(eq(appSecrets.slot, slot))
   invalidateSecretCache()
   logger.info('密钥已删除', { slot, by: userId })

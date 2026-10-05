@@ -59,9 +59,12 @@ export default async function OpsCredentials() {
           <SecretForm key={v.slot} view={v} />
         ))}
       </div>
-      <div className="mt-4 space-y-3">
-        <UpstreamTest group="claude" label="Claude 组" />
-        <UpstreamTest group="codex" label="Codex 组" />
+      <div className="mt-4">
+        <UpstreamTest
+          keys={upstream
+            .filter((v) => v.slot !== 'NEWAPI_BASE_URL')
+            .map((v) => ({ slot: v.slot, label: v.label, configured: v.configured }))}
+        />
       </div>
 
       <h2 className="mt-10 text-lg font-semibold">支付</h2>
