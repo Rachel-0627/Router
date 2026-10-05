@@ -135,7 +135,8 @@ export async function runInjectionTest(_prev: InjectionState, form: FormData): P
       probes,
     }
   } catch (e) {
-    logger.error('注入验证失败', { keySlot, model, detail: e instanceof Error ? e.message : String(e) })
-    return { ok: false, message: '测试没跑完 —— 上游超时或连不上,稍后再试。' }
+    const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+    logger.error('注入验证失败', { keySlot, model, url, detail })
+    return { ok: false, message: `测试没跑完。实际请求:${url}(走 ${route.via})。底层报错:${detail}` }
   }
 }

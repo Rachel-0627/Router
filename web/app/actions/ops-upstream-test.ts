@@ -109,10 +109,18 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
               : ''
 
     logger.error('上游连通性测试未通过', { keySlot, model, protocol, status: s, detail })
-    return { ok: false, message: `上游返回 ${s}。${hint} 上游原话:${detail}` }
+    return { ok: false, message: `上游返回 ${s}(走 ${route.via},请求 ${url})。${hint} 上游原话:${detail}` }
   } catch (e) {
-    logger.error('上游连通性测试失败', { keySlot, model, detail: e instanceof Error ? e.message : String(e) })
-    return { ok: false, message: '连不上上游 —— 检查地址拼写,或上游正好不可用。' }
+    // ⚠️ 必须把实际请求的地址和底层报错带出来。只说"连不上"会把真相盖住 ——
+    //    地址拼错、超时、DNS 不通、协议选错,这几种现象一模一样但处理方式完全不同。
+    const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+    logger.error('上游连通性测试失败', { keySlot, model, url, detail })
+    const hint = /timeout|abort/i.test(detail)
+      ? '超时了(等了 20 秒)。上游可能对这个模型响应特别慢。'
+      : /fetch failed|ENOTFOUND|ECONNREFUSED|certificate/i.test(detail)
+        ? '连接层就失败了 —— 地址不通、DNS 解析不了,或证书有问题。'
+        : ''
+    return { ok: false, message: `请求没发成功。实际请求:${url}(走 ${route.via})。${hint} 底层报错:${detail}` }
   }
 }
 
@@ -171,7 +179,9 @@ export async function listUpstreamModels(
       message: `走 ${route.via}:这把 key 能调 ${total} 个模型${filter ? `,匹配「${filter}」的 ${ids.length} 个` : ''}:${ids.join('  ')}`,
     }
   } catch (e) {
-    logger.error('拉取上游模型清单失败', { keySlot, detail: e instanceof Error ? e.message : String(e) })
-    return { ok: false, message: '连不上上游 —— 检查地址,或上游正好不可用。' }
+    const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+    const url = `${route.baseUrl}/v1/models`
+    logger.error('拉取上游模型清单失败', { keySlot, url, detail })
+    return { ok: false, message: `请求没发成功。实际请求:${url}(走 ${route.via})。底层报错:${detail}` }
   }
 }
