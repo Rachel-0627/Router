@@ -12,10 +12,22 @@ import type { KeyChoice } from './upstream-test'
 export function InjectionTest({ keys }: { keys: KeyChoice[] }) {
   const [state, action, pending] = useActionState<InjectionState, FormData>(runInjectionTest, undefined)
   const usable = keys.filter((k) => k.configured)
-  // 选哪把 key 就带出哪条线的模型和协议 —— 跨组搭配会一直挂到超时,
-  // 与其让人踩进去再报错,不如一开始就填对
+  // ⚠️ 这几个输入必须是**受控**的。Server Action 提交完成后 React 会自动
+  //    重置表单,非受控输入会弹回默认值 —— 结果就是你明明测的是 glm-5.1,
+  //    测完界面显示 glm-5.3,根本不知道刚才到底测了什么。
   const [picked, setPicked] = useState(usable[0]?.slot ?? '')
   const cur = usable.find((k) => k.slot === picked) ?? usable[0]
+  const [model, setModel] = useState(usable[0]?.sampleModel ?? '')
+  const [protocol, setProtocol] = useState(usable[0]?.protocol ?? 'openai')
+
+  // 换 key 时把模型和协议带成那条线的,但不覆盖用户已经改过的值
+  function pick(slot: string) {
+    setPicked(slot)
+    const k = usable.find((x) => x.slot === slot)
+    if (k?.sampleModel) setModel(k.sampleModel)
+    if (k?.protocol) setProtocol(k.protocol)
+  }
+
   if (usable.length === 0) return null
 
   return (
@@ -33,7 +45,7 @@ export function InjectionTest({ keys }: { keys: KeyChoice[] }) {
           <select
             name="keySlot"
             value={picked}
-            onChange={(e) => setPicked(e.target.value)}
+            onChange={(e) => pick(e.target.value)}
             className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-[14px]"
           >
             {usable.map((k) => (
@@ -46,18 +58,18 @@ export function InjectionTest({ keys }: { keys: KeyChoice[] }) {
         <label className="flex flex-col gap-1">
           <span className="text-[12px] text-[var(--muted)]">模型名</span>
           <input
-            key={picked}
             name="model"
             autoComplete="off"
             spellCheck={false}
-            defaultValue={cur?.sampleModel ?? ''}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
             placeholder="模型名"
             className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 font-mono text-[14px]"
           />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[12px] text-[var(--muted)]">协议</span>
-          <select key={picked} name="protocol" defaultValue={cur?.protocol ?? 'openai'} className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-[14px]">
+          <select name="protocol" value={protocol} onChange={(e) => setProtocol(e.target.value)} className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-[14px]">
             <option value="openai">OpenAI 格式</option>
             <option value="anthropic">Anthropic 格式</option>
           </select>

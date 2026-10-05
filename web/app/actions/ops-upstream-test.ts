@@ -42,7 +42,8 @@ async function routeForSlot(
   const g = groups.find((x) => x.secretSlot === keySlot)
   if (g?.upstreamId) {
     const u = await getUpstream(g.upstreamId)
-    if (u) return { baseUrl: u.baseUrl, style: u.authStyle, via: u.displayName }
+    // via 带上用的哪条产品线的 key,表单重置后也能回溯
+    if (u) return { baseUrl: u.baseUrl, style: u.authStyle, via: `${u.displayName} · ${g.displayName} 组 key` }
   }
   // 兜底:老路径,地址还在密钥表或环境变量里,鉴权一律 Bearer
   const legacy = (await getSecret('NEWAPI_BASE_URL')) || envFallbackBaseUrl()

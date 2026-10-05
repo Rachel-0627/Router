@@ -5,7 +5,7 @@
  * 和产品分组解耦:想摸清上游到底有哪些模型、哪把 key 能调什么,
  * 直接填就行,不用先往模型目录里塞假数据。
  */
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { testUpstream } from '@/app/actions/ops-upstream-test'
 import { type SecretState } from '@/app/actions/ops-secrets'
 
@@ -24,6 +24,17 @@ export type KeyChoice = {
 export function UpstreamTest({ keys }: { keys: KeyChoice[] }) {
   const [state, action, pending] = useActionState<SecretState, FormData>(testUpstream, undefined)
   const usable = keys.filter((k) => k.configured)
+  // 受控:Server Action 提交完会重置表单,非受控输入会弹回默认值,
+  // 让人分不清刚才到底测的是什么
+  const [picked, setPicked] = useState(usable[0]?.slot ?? '')
+  const [model, setModel] = useState(usable[0]?.sampleModel ?? '')
+  const [protocol, setProtocol] = useState(usable[0]?.protocol ?? 'anthropic')
+  function pick(slot: string) {
+    setPicked(slot)
+    const k = usable.find((x) => x.slot === slot)
+    if (k?.sampleModel) setModel(k.sampleModel)
+    if (k?.protocol) setProtocol(k.protocol)
+  }
 
   return (
     <form action={action} className="rounded-lg border border-[var(--border)] p-5">
@@ -42,12 +53,13 @@ export function UpstreamTest({ keys }: { keys: KeyChoice[] }) {
               <span className="text-[12px] text-[var(--muted)]">用哪把 key</span>
               <select
                 name="keySlot"
-                defaultValue={usable[0]?.slot}
+                value={picked}
+                onChange={(e) => pick(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-[14px]"
               >
                 {usable.map((k) => (
                   <option key={k.slot} value={k.slot}>
-                    {k.label}
+                    {k.groupName ? `${k.groupName} 组` : k.label}
                   </option>
                 ))}
               </select>
@@ -59,7 +71,9 @@ export function UpstreamTest({ keys }: { keys: KeyChoice[] }) {
                 name="model"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="claude-opus-5"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="模型名"
                 className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 font-mono text-[14px]"
               />
             </label>
@@ -68,7 +82,8 @@ export function UpstreamTest({ keys }: { keys: KeyChoice[] }) {
               <span className="text-[12px] text-[var(--muted)]">协议</span>
               <select
                 name="protocol"
-                defaultValue="anthropic"
+                value={protocol}
+                onChange={(e) => setProtocol(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-[14px]"
               >
                 <option value="anthropic">Anthropic 格式</option>

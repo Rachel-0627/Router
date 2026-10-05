@@ -34,7 +34,9 @@ async function routeForSlot(keySlot: string) {
   const g = (await getGroups()).find((x) => x.secretSlot === keySlot)
   if (g?.upstreamId) {
     const u = await getUpstream(g.upstreamId)
-    if (u) return { baseUrl: u.baseUrl, style: u.authStyle as AuthStyle, via: u.displayName }
+    // via 里带上**用的哪条产品线的 key** —— 只说上游名的话,表单重置后
+    // 根本回溯不了刚才到底用的哪把
+    if (u) return { baseUrl: u.baseUrl, style: u.authStyle as AuthStyle, via: `${u.displayName} · ${g.displayName} 组 key` }
   }
   const legacy = (await getSecret('NEWAPI_BASE_URL')) || envFallbackBaseUrl()
   return legacy ? { baseUrl: legacy.replace(/\/$/, ''), style: 'bearer' as AuthStyle, via: '旧配置' } : null
