@@ -102,10 +102,10 @@ export async function runInjectionTest(_prev: InjectionState, form: FormData): P
         ...(isAnthropic ? { 'anthropic-version': '2023-06-01' } : {}),
       },
       body: JSON.stringify(body),
-      // ⚠️ 三个探针**串行**跑,单个超时 × 3 必须塞得进页面声明的 maxDuration(60 秒),
-      //    否则函数先被掐断,报出来的错和"上游不可用"长得一模一样。
-      //    15 × 3 = 45 秒,留 15 秒余量。
-      signal: AbortSignal.timeout(15_000),
+      // ⚠️ 三个探针**串行**跑,单个超时 × 3 必须塞得进页面的 maxDuration(300 秒)。
+      //    给到 60 秒是因为推理型模型首字节可能要几十秒 —— 按普通模型的节奏
+      //    设超时,会把"模型在想"误判成"上游挂了"。60 × 3 = 180 秒,留足余量。
+      signal: AbortSignal.timeout(60_000),
     })
     const text = await res.text()
     if (!res.ok) {
@@ -190,7 +190,7 @@ export async function runInjectionTest(_prev: InjectionState, form: FormData): P
     const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     logger.error('注入验证失败', { keySlot, model, url, detail })
     const hint = /timeout|abort/i.test(detail)
-      ? `等了 15 秒没响应。最常见的原因是**这把 key 调不了 ${model}**(上游 key 绑分组,跨组调会一直挂着),其次是上游正好不可用。`
+      ? `等了 60 秒没响应。最常见的原因是**这把 key 调不了 ${model}**(上游 key 绑分组,跨组调会一直挂着),其次是上游正好不可用。`
       : ''
     return { ok: false, message: `测试没跑完。${hint} 实际请求:${url}(走 ${route.via})。底层报错:${detail}` }
   }

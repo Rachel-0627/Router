@@ -14,12 +14,15 @@ import { KekPanel } from '@/components/ops/kek-panel'
 export const metadata = { title: 'ops · credentials', robots: { index: false, follow: false } }
 export const dynamic = 'force-dynamic'
 /**
- * 本页的 Server Action 要真发请求到上游(连通性实测 20 秒、注入验证三个探针
- * 各 40 秒)。不显式给足时长的话,函数会先被平台掐断,报出来的错和
- * "上游连不上"长得一模一样,根本没法排查。
- * ⚠️ Vercel Hobby 上限 300 秒,别超。
+ * 本页的 Server Action 要真发请求到上游。不显式给足时长的话,函数会先被
+ * 平台掐断,而那个错和"上游连不上"长得一模一样,根本没法排查。
+ *
+ * 为什么要这么长:推理型模型(带思考过程的)首字节可能要几十秒,
+ * 按普通模型的节奏设超时会把"模型在想"误判成"上游挂了"。
+ * 注入验证三个探针串行 × 60 秒 = 180 秒,留足余量。
+ * ⚠️ Vercel Hobby 上限就是 300 秒,不能再高(之前设 800 导致部署失败过)。
  */
-export const maxDuration = 60
+export const maxDuration = 300
 
 const fmt = (d: Date | null) => (d ? new Date(d).toLocaleString('zh-CN') : null)
 

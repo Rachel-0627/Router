@@ -83,7 +83,8 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
       },
       // 最小请求:1 个 token,花掉的钱可以忽略
       body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
-      signal: AbortSignal.timeout(20_000),
+      // 推理型模型首字节可能要几十秒,按普通模型设超时会误判成"上游挂了"
+      signal: AbortSignal.timeout(60_000),
     })
 
     if (res.ok) {
@@ -116,7 +117,7 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
     const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     logger.error('上游连通性测试失败', { keySlot, model, url, detail })
     const hint = /timeout|abort/i.test(detail)
-      ? '超时了(等了 20 秒)。上游可能对这个模型响应特别慢。'
+      ? '等了 60 秒没响应。要么这把 key 调不了这个模型(上游 key 绑分组,跨组调会一直挂着),要么上游确实不可用。先用上面的「拉取清单」看这把 key 到底能调哪些模型。'
       : /fetch failed|ENOTFOUND|ECONNREFUSED|certificate/i.test(detail)
         ? '连接层就失败了 —— 地址不通、DNS 解析不了,或证书有问题。'
         : ''
