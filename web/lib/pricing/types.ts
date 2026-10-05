@@ -13,9 +13,20 @@ export type TokenPrices = {
  *   Codex 线   codexBudget → codexPlus → codexPro   (上游的 特价/自建plus/自建pro)
  * 数组顺序 = 故障转移的降级顺序(按进货价从低到高)。
  */
+/**
+ * 上游进货分组。
+ *
+ * ⚠️ **这个数组的顺序就是故障转移顺序**(见 calculate.ts 的 fallbackChain:
+ *    它按本数组顺序过滤出该模型有货的档)。所以必须**从便宜到贵**排列 ——
+ *    排错了会导致优先走贵档,毛利凭空缩水;而且 worstCaseMargin 取的是
+ *    链条最后一档,顺序错了赔本护栏算的就是错的。
+ */
 export const UPSTREAM_GROUPS = [
+  // GLM 免费档排最前 —— 它是真·零成本,任何情况下都该优先走
+  'glmFree',
   'vip', 'default', 'claudeExclusive',
   'codexBudget', 'codexPlus', 'codexPro',
+  'glmFeatured', 'glmCompany',
 ] as const
 export type UpstreamGroup = (typeof UPSTREAM_GROUPS)[number]
 
@@ -27,6 +38,9 @@ export const UPSTREAM_GROUP_LABEL: Record<UpstreamGroup, string> = {
   codexBudget: '特价分组',
   codexPlus: '自建codex-plus',
   codexPro: '自建codex-pro',
+  glmFree: '免费模型',
+  glmFeatured: '精选模型',
+  glmCompany: '公司分组',
 }
 
 /**

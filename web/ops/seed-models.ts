@@ -14,6 +14,7 @@ import { db } from '../lib/db'
 import { models } from '../lib/db/schema-models'
 import { env } from '../lib/env'
 import type { ModelSeed } from '../lib/pricing/types'
+import { GLM_MODELS } from '../lib/pricing/models/glm'
 
 function toRow(m: ModelSeed, order: number) {
   return {
@@ -42,7 +43,7 @@ async function main() {
     console.error('❌ DATABASE_URL 未配置')
     process.exit(2)
   }
-  const all = [...CLAUDE_MODELS, ...CODEX_MODELS]
+  const all = [...CLAUDE_MODELS, ...CODEX_MODELS, ...GLM_MODELS]
   let inserted = 0
   let updated = 0
 
