@@ -20,17 +20,15 @@ export type SlotDef = {
   /** true = 密文框,页面只显示尾号;false = 明文显示 */
   secret: boolean
   kind: 'upstream' | 'group' | 'payment'
+  /** kind='group' 时:这条产品线挂在哪个上游下,页面按它分块 */
+  upstreamId?: string
+  groupId?: string
 }
 
 /** 和分组无关的固定槽位 */
+// ⚠️ 上游地址**不在这里**。它不是秘密,而且存成"一个槽位"注定只能有一个值 ——
+//    已搬进 upstreams 表,支持挂多家供应商。
 export const FIXED_SLOTS: SlotDef[] = [
-  {
-    slot: 'NEWAPI_BASE_URL',
-    label: '上游地址',
-    hint: '直连上游填 https://zexitongxue.com(末尾不要带斜杠)',
-    secret: false,
-    kind: 'upstream',
-  },
   {
     slot: 'NEWAPI_SERVICE_KEY',
     label: '通用上游 key(兜底)',
@@ -63,9 +61,11 @@ export async function allSlots(): Promise<SlotDef[]> {
   const groupSlots: SlotDef[] = groups.map((g) => ({
     slot: g.secretSlot || defaultSlotForGroup(g.id),
     label: `${g.displayName} 组上游 key`,
-    hint: `这条产品线用哪把上游 key。key 绑的上游分组决定进货价,不要和别的组混用`,
+    hint: '这条产品线用哪把上游 key。key 绑的上游分组决定进货价,不要和别的组混用',
     secret: true,
     kind: 'group' as const,
+    upstreamId: g.upstreamId,
+    groupId: g.id,
   }))
   // 两个分组万一指到同一个槽位,只留一个框
   const seen = new Set<string>()

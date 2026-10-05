@@ -4,6 +4,7 @@ import { models } from '@/lib/db/schema-models'
 import { apiKeys } from '@/lib/db/schema'
 import { getGroups } from '@/lib/pricing/groups'
 import { slotStatuses } from '@/lib/secrets/store'
+import { getUpstreams } from '@/lib/upstreams'
 import { defaultSlotForGroup } from '@/lib/secrets/slots'
 import { GroupForm, type GroupView } from '@/components/ops/group-form'
 
@@ -11,7 +12,8 @@ export const metadata = { title: 'ops · groups', robots: { index: false, follow
 export const dynamic = 'force-dynamic'
 
 export default async function OpsGroups() {
-  const [groups, statuses] = await Promise.all([getGroups(), slotStatuses()])
+  const [groups, statuses, ups] = await Promise.all([getGroups(), slotStatuses(), getUpstreams()])
+  const upstreamChoices = ups.map((u) => ({ id: u.id, displayName: u.displayName }))
   // key 填没填要显示在分组上 —— 不然用户不知道还差这一步
   const filled = new Set(statuses.filter((s) => s.configured).map((s) => s.slot))
 
@@ -34,6 +36,7 @@ export default async function OpsGroups() {
         protocol: g.protocol,
         secretSlot: g.secretSlot || defaultSlotForGroup(g.id),
         sortOrder: g.sortOrder,
+        upstreamId: g.upstreamId,
         keyFilled: filled.has(g.secretSlot || defaultSlotForGroup(g.id)),
         modelCount: m.n,
         keyCount: k.n,
@@ -51,13 +54,13 @@ export default async function OpsGroups() {
 
       <div className="mt-8 space-y-5">
         {views.map((v) => (
-          <GroupForm key={v.id} view={v} />
+          <GroupForm key={v.id} view={v} upstreams={upstreamChoices} />
         ))}
       </div>
 
       <h2 className="mt-12 text-lg font-semibold">新建</h2>
       <div className="mt-4">
-        <GroupForm isNew />
+        <GroupForm isNew upstreams={upstreamChoices} />
       </div>
 
       <div className="mt-10 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">

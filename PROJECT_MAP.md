@@ -81,6 +81,7 @@ ai-gateway/
 │   │   │       │                      授权只能命令行 ops:grant ——
 │   │   │       │                      网页提权入口本身就是漏洞温床
 │   │   │       ├── groups/            产品分组(自定义,新建=新开产品线) ✅
+│   │   │       │                      每条产品线挂到某个上游 + 自己的 key
 │   │   │       └── credentials/       密钥配置(加密存库,存完即生效) ✅
 │   │   │                              槽位按分组自动生成,
 │   │   │                              另含任意 key×任意模型的实测面板
@@ -93,10 +94,16 @@ ai-gateway/
 │   │       │   app/actions/ops-secrets.ts 密钥存取/轮换          ✅
 │   │       │   app/actions/ops-upstream-test.ts 上游实测(不绑分组) ✅
 │   │       │   app/actions/ops-groups.ts  产品分组增删改          ✅
+│   │       │   app/actions/ops-upstreams.ts 上游供应商增删改       ✅
 │   │       └── webhook/
 │   │           └── [provider]/[secret]/  支付回调(路径带密钥+回查校验) ✅
 │   │
 │   ├── lib/
+│   │   ├── upstreams.ts           上游供应商:地址+鉴权方式      ✅
+│   │   │                          ⚠️ 鉴权按家配(bearer/x-api-key/raw),
+│   │   │                             写死一种就只能接一家
+│   │   │                          ⚠️ 不做跨上游自动故障转移 ——
+│   │   │                             那要处理重试/计费归属/成本记账
 │   │   ├── secrets/               运维密钥:加密存库,保存即生效   ✅
 │   │   │   ├── crypto.ts              AES-256-GCM 加解密         ✅
 │   │   │   ├── keys.ts                KEK 管理,用指纹而非版本号   ✅

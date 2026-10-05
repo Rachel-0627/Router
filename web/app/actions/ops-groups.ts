@@ -18,6 +18,7 @@ import { hasOpsAccess } from '@/lib/auth/ops'
 import { invalidateGroupCache, getGroup } from '@/lib/pricing/groups'
 import { invalidateModelCache } from '@/lib/pricing/registry'
 import { invalidateSecretCache } from '@/lib/secrets/store'
+import { isValidUpstreamId } from '@/lib/upstreams'
 import { defaultSlotForGroup } from '@/lib/secrets/slots'
 import { logger } from '@/lib/logger'
 
@@ -33,6 +34,7 @@ const Schema = z.object({
   ratio: z.coerce.number().min(0.05, { error: '倍率不能低于 0.05' }).max(1, { error: '倍率不能超过 1(不能比官方还贵)' }),
   status: z.enum(['live', 'pending']),
   protocol: z.enum(['anthropic', 'openai']),
+  upstreamId: z.string().trim().max(32),
   secretSlot: z.string().trim().max(64),
   sortOrder: z.coerce.number().min(0).max(9999),
 })
@@ -56,6 +58,7 @@ export async function saveGroup(_prev: GroupState, form: FormData): Promise<Grou
     ratio: form.get('ratio'),
     status: form.get('status'),
     protocol: form.get('protocol'),
+    upstreamId: (form.get('upstreamId') ?? '').toString().trim(),
     secretSlot: (form.get('secretSlot') ?? '').toString().trim(),
     sortOrder: form.get('sortOrder') ?? 0,
   })
@@ -64,6 +67,11 @@ export async function saveGroup(_prev: GroupState, form: FormData): Promise<Grou
   const d = parsed.data
   // 没填就按分组标识自动起名,省得用户还要想一个
   const secretSlot = d.secretSlot || defaultSlotForGroup(d.groupId)
+
+  // 挂了上游就必须是真实存在的 —— 指向不存在的上游会让网关找不到地址
+  if (d.upstreamId && !(await isValidUpstreamId(d.upstreamId))) {
+    return { ok: false, message: `上游「${d.upstreamId}」不存在` }
+  }
 
   const existed = await getGroup(d.groupId)
   const row = {
@@ -74,6 +82,7 @@ export async function saveGroup(_prev: GroupState, form: FormData): Promise<Grou
     status: d.status,
     protocol: d.protocol,
     secretSlot,
+    upstreamId: d.upstreamId,
     sortOrder: d.sortOrder,
     updatedAt: new Date(),
   }

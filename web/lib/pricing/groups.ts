@@ -29,6 +29,8 @@ export type ProductGroup = {
   ratio: number
   /** live = 可购买;pending = 页面展示但不可用 */
   status: 'live' | 'pending'
+  /** 这条产品线从哪个上游进货(upstreams.id);空 = 退回旧的单一配置 */
+  upstreamId: string
   /** 这组用哪把上游 key(app_secrets 槽位名);空 = 退回通用 key */
   secretSlot: string
   /** 转发协议。Claude 系 anthropic,GPT 系 openai。发错上游直接报错 */
@@ -44,6 +46,7 @@ export const SEED_GROUPS: ProductGroup[] = [
     blurb: 'Claude models for Claude Code, Cline, and the Anthropic SDK.',
     ratio: 0.8,
     status: 'live',
+    upstreamId: 'zexitongxue',
     secretSlot: 'NEWAPI_SERVICE_KEY_CLAUDE',
     protocol: 'anthropic',
     sortOrder: 10,
@@ -54,6 +57,7 @@ export const SEED_GROUPS: ProductGroup[] = [
     blurb: 'GPT models for Codex, Cursor, and OpenAI-compatible clients.',
     ratio: 0.8,
     status: 'pending',
+    upstreamId: 'zexitongxue',
     secretSlot: 'NEWAPI_SERVICE_KEY_CODEX',
     protocol: 'openai',
     sortOrder: 20,
@@ -83,6 +87,7 @@ function rowToGroup(r: typeof productGroupSettings.$inferSelect): ProductGroup {
     blurb: r.blurb,
     ratio: r.ratio,
     status: r.status === 'live' ? 'live' : 'pending',
+    upstreamId: r.upstreamId,
     // 空值兜底:历史数据里这列可能是空的。不补的话会退回通用 key,
     // 而那把多半没配 —— 网关会直接 503,排查起来还很隐蔽。
     secretSlot: r.secretSlot || defaultSlotForGroup(r.groupId),

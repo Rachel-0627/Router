@@ -94,6 +94,11 @@ export const productGroupSettings = pgTable('product_group_settings', {
   /** live = 可购买;pending = 页面展示但不可用 */
   status: text('status').notNull().default('pending'),
   /**
+   * 这条产品线从哪个上游进货(upstreams.id)。
+   * 空则退回环境变量 NEWAPI_BASE_URL —— 老数据的兜底路径。
+   */
+  upstreamId: text('upstream_id').notNull().default(''),
+  /**
    * 这个分组用哪把上游 key(app_secrets 的槽位名)。
    * 空则退回通用的 NEWAPI_SERVICE_KEY。
    */

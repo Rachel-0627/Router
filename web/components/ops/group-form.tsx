@@ -17,6 +17,7 @@ export type GroupView = {
   protocol: string
   secretSlot: string
   sortOrder: number
+  upstreamId: string
   /** 这条线的 key 填了没 —— 在密钥配置页填,不在本页 */
   keyFilled: boolean
   modelCount: number
@@ -25,7 +26,15 @@ export type GroupView = {
 
 const input = 'rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-[14px]'
 
-export function GroupForm({ view, isNew = false }: { view?: GroupView; isNew?: boolean }) {
+export function GroupForm({
+  view,
+  upstreams,
+  isNew = false,
+}: {
+  view?: GroupView
+  upstreams: { id: string; displayName: string }[]
+  isNew?: boolean
+}) {
   const [state, action, pending] = useActionState<GroupState, FormData>(saveGroup, undefined)
   const [delState, delAction, deleting] = useActionState<GroupState, FormData>(deleteGroup, undefined)
   const msg = state ?? delState
@@ -89,6 +98,18 @@ export function GroupForm({ view, isNew = false }: { view?: GroupView; isNew?: b
           <select name="status" defaultValue={v?.status ?? 'pending'} className={input}>
             <option value="live">已上架(可购买)</option>
             <option value="pending">未上架(只展示)</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[12px] text-[var(--muted)]">从哪家进货</span>
+          <select name="upstreamId" defaultValue={v?.upstreamId ?? upstreams[0]?.id ?? ''} className={input}>
+            {upstreams.length === 0 && <option value="">(还没有上游,先去上面新增一个)</option>}
+            {upstreams.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.displayName}
+              </option>
+            ))}
           </select>
         </label>
 

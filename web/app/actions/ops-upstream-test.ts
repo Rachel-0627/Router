@@ -10,6 +10,8 @@
 import { getCurrentUser } from '@/lib/auth'
 import { hasOpsAccess } from '@/lib/auth/ops'
 import { getSecret } from '@/lib/secrets/store'
+import { getGroups } from '@/lib/pricing/groups'
+import { getUpstream, authHeaders, envFallbackBaseUrl, type AuthStyle } from '@/lib/upstreams'
 import { logger } from '@/lib/logger'
 import type { SecretState } from './ops-secrets'
 
@@ -24,6 +26,28 @@ const PROTOCOLS = {
   openai: '/v1/chat/completions',
 } as const
 type Protocol = keyof typeof PROTOCOLS
+
+
+/**
+ * 这把 key 该往哪儿发、怎么鉴权。
+ *
+ * key 是按产品分组存的,分组又挂在某个上游上 —— 所以从槽位就能倒推出
+ * 该用哪家的地址。不这么做的话,填了第二家的 key 测试还会往第一家发,
+ * 测了个寂寞。
+ */
+async function routeForSlot(
+  keySlot: string,
+): Promise<{ baseUrl: string; style: AuthStyle; via: string } | null> {
+  const groups = await getGroups()
+  const g = groups.find((x) => x.secretSlot === keySlot)
+  if (g?.upstreamId) {
+    const u = await getUpstream(g.upstreamId)
+    if (u) return { baseUrl: u.baseUrl, style: u.authStyle, via: u.displayName }
+  }
+  // 兜底:老路径,地址还在密钥表或环境变量里,鉴权一律 Bearer
+  const legacy = (await getSecret('NEWAPI_BASE_URL')) || envFallbackBaseUrl()
+  return legacy ? { baseUrl: legacy.replace(/\/$/, ''), style: 'bearer', via: '旧配置' } : null
+}
 
 export async function testUpstream(_prev: SecretState, form: FormData): Promise<SecretState> {
   try {
@@ -41,20 +65,20 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
   if (model.length > 100 || /\s/.test(model)) return { ok: false, message: '模型名不合法(太长或含空格)。' }
   if (!(protocol in PROTOCOLS)) return { ok: false, message: '未知协议。' }
 
-  const base = await getSecret('NEWAPI_BASE_URL')
-  if (!base) return { ok: false, message: '先填上游地址。' }
+  const route = await routeForSlot(keySlot)
+  if (!route) return { ok: false, message: '这把 key 所属的产品线还没挂上游,先去分组管理挑一个。' }
   const key = await getSecret(keySlot)
   if (!key) return { ok: false, message: `「${keySlot}」还没填值。` }
 
   const isAnthropic = protocol === 'anthropic'
-  const url = `${base.replace(/\/$/, '')}${PROTOCOLS[protocol]}`
+  const url = `${route.baseUrl}${PROTOCOLS[protocol]}`
 
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
+        ...authHeaders(key, route.style),
         ...(isAnthropic ? { 'anthropic-version': '2023-06-01' } : {}),
       },
       // 最小请求:1 个 token,花掉的钱可以忽略
@@ -64,7 +88,7 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
 
     if (res.ok) {
       logger.info('上游连通性测试通过', { keySlot, model, protocol })
-      return { ok: true, message: `通了。这把 key 能调 ${model}。` }
+      return { ok: true, message: `通了(走 ${route.via})。这把 key 能调 ${model}。` }
     }
 
     // ⚠️ 把上游**原话**带出来。只说"上游故障"会把真正的原因盖掉 ——
@@ -115,14 +139,14 @@ export async function listUpstreamModels(
   const filter = (form.get('filter') ?? '').toString().trim().toLowerCase()
   if (!keySlot) return { ok: false, message: '请选一把 key。' }
 
-  const base = await getSecret('NEWAPI_BASE_URL')
-  if (!base) return { ok: false, message: '先填上游地址。' }
+  const route = await routeForSlot(keySlot)
+  if (!route) return { ok: false, message: '这把 key 所属的产品线还没挂上游,先去分组管理挑一个。' }
   const key = await getSecret(keySlot)
   if (!key) return { ok: false, message: `「${keySlot}」还没填值。` }
 
   try {
-    const res = await fetch(`${base.replace(/\/$/, '')}/v1/models`, {
-      headers: { Authorization: `Bearer ${key}` },
+    const res = await fetch(`${route.baseUrl}/v1/models`, {
+      headers: authHeaders(key, route.style),
       signal: AbortSignal.timeout(20_000),
     })
     if (!res.ok) {
@@ -140,11 +164,11 @@ export async function listUpstreamModels(
 
     logger.info('拉取上游模型清单', { keySlot, total, matched: ids.length, filter })
     if (ids.length === 0) {
-      return { ok: false, message: `这把 key 能调 ${total} 个模型,但没有匹配「${filter}」的。` }
+      return { ok: false, message: `走 ${route.via}:这把 key 能调 ${total} 个模型,但没有匹配「${filter}」的。` }
     }
     return {
       ok: true,
-      message: `这把 key 能调 ${total} 个模型${filter ? `,匹配「${filter}」的 ${ids.length} 个` : ''}:${ids.join('  ')}`,
+      message: `走 ${route.via}:这把 key 能调 ${total} 个模型${filter ? `,匹配「${filter}」的 ${ids.length} 个` : ''}:${ids.join('  ')}`,
     }
   } catch (e) {
     logger.error('拉取上游模型清单失败', { keySlot, detail: e instanceof Error ? e.message : String(e) })

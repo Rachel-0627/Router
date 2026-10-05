@@ -161,3 +161,6 @@ export type UsageDaily = typeof usageDaily.$inferSelect
 export { models, productGroupSettings, type ModelRow, type NewModelRow, type GroupSettingRow } from './schema-models'
 // 运维密钥(上游 key / 支付 key)也单独一个文件,原因同上。
 export { appSecrets, type AppSecretRow } from './schema-secrets'
+
+// 上游供应商(地址+鉴权方式)也单独一个文件。
+export { upstreams, type UpstreamRow } from './schema-upstreams'

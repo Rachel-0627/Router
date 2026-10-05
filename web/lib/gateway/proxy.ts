@@ -22,6 +22,7 @@ import { getGroup, type ProductGroup } from '../pricing/groups'
 import type { ProductGroupId } from '../pricing/types'
 import { SseUsageCollector, usageFromJson } from './usage'
 import { getSecret } from '../secrets/store'
+import { getUpstream, authHeaders, envFallbackBaseUrl } from '../upstreams'
 
 /** 每个 key 每分钟最多多少次请求 */
 const RPM_PER_KEY = 120
@@ -36,18 +37,30 @@ function apiError(status: number, type: string, message: string, extraHeaders?: 
 }
 
 /**
- * 按产品分组选服务令牌。令牌上绑的上游分组决定往哪批渠道路由。
+ * 解析这条产品线该往哪儿发、怎么鉴权。
  *
- * 槽位名**存在分组自己身上**(product_group_settings.secret_slot),
- * 不再按分组标识写死 —— 分组是用户在后台自定义的,写死就加不了新产品线。
+ * 地址和鉴权方式都挂在**分组所属的上游**上,不写死 —— 否则接第二家供应商
+ * 就要改代码。鉴权方式各家差别很实在(Bearer / x-api-key / 裸值)。
  *
- * 取值顺序:分组指定的槽位 → 通用令牌。
- * getSecret 内部还带「库里没有就读环境变量」的兜底,所以这里只管挑槽位。
+ * ⚠️ 三层兜底,顺序不能乱。这是迁移期的安全网:库里还没回填完时,
+ *    网关也必须照常转发,不能因为换了数据来源就全站 503。
+ *      1. 分组挂的上游(新路径)
+ *      2. 密钥表里的 NEWAPI_BASE_URL(旧路径,Bearer)
+ *      3. 环境变量 NEWAPI_BASE_URL(最老的路径)
  */
-async function serviceKeyFor(group: ProductGroup | undefined): Promise<string | undefined> {
-  const slot = group?.secretSlot
-  const byGroup = slot ? await getSecret(slot) : undefined
-  return byGroup || env.NEWAPI_SERVICE_KEY || undefined
+type Route = { baseUrl: string; headers: Record<string, string> }
+
+async function resolveRoute(group: ProductGroup | undefined): Promise<Route | null> {
+  const key = (group?.secretSlot ? await getSecret(group.secretSlot) : undefined) || env.NEWAPI_SERVICE_KEY
+  if (!key) return null
+
+  const upstream = group?.upstreamId ? await getUpstream(group.upstreamId) : undefined
+  if (upstream) return { baseUrl: upstream.baseUrl, headers: authHeaders(key, upstream.authStyle) }
+
+  // 旧路径:地址还存在密钥表/环境变量里,鉴权一律 Bearer(当时只有 new-api 一家)
+  const legacy = (await getSecret('NEWAPI_BASE_URL')) || envFallbackBaseUrl()
+  if (!legacy) return null
+  return { baseUrl: legacy.replace(/\/$/, ''), headers: authHeaders(key, 'bearer') }
 }
 
 /** 这些响应头不能原样透传,由我们自己的运行时决定 */
@@ -124,23 +137,23 @@ export async function handleProxy(req: Request, upstreamPath: string): Promise<R
     return apiError(403, 'permission_error', `The ${ownName} group is not available yet.`)
   }
 
-  const [serviceKey, baseUrl] = await Promise.all([
-    serviceKeyFor(ownGroup),
-    getSecret('NEWAPI_BASE_URL'),
-  ])
-  if (!baseUrl || !serviceKey) {
-    logger.error('网关未配置:缺上游地址或该分组的服务令牌', { group: keyGroup })
+  const route = await resolveRoute(ownGroup)
+  if (!route) {
+    logger.error('网关未配置:该分组缺上游地址或服务令牌', {
+      group: keyGroup,
+      upstream: ownGroup?.upstreamId ?? '(未挂)',
+    })
     return apiError(503, 'api_error', 'The gateway is not available right now.', { 'Retry-After': '30' })
   }
 
-  const target = `${baseUrl.replace(/\/$/, '')}${upstreamPath}`
+  const target = `${route.baseUrl}${upstreamPath}`
   let upstream: Response
   try {
     upstream = await fetch(target, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${serviceKey}`,
+        ...route.headers,
         // 透传 Anthropic 的版本头,不然上游可能拒绝
         ...(req.headers.get('anthropic-version')
           ? { 'anthropic-version': req.headers.get('anthropic-version') as string }
