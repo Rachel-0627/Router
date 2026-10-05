@@ -2,14 +2,18 @@ import { db } from '@/lib/db'
 import { models } from '@/lib/db/schema-models'
 import { getGroupSettings, rowToPricing } from '@/lib/pricing/registry'
 import { costPrices, lastResortGroup } from '@/lib/pricing/calculate'
-import { PRODUCT_GROUPS } from '@/lib/pricing/groups'
+import { getGroups } from '@/lib/pricing/groups'
 import { RatioForm } from '@/components/ops/ratio-form'
 
 export const metadata = { title: 'ops · pricing', robots: { index: false, follow: false } }
 export const dynamic = 'force-dynamic'
 
 export default async function OpsPricing() {
-  const [rows, settings] = await Promise.all([db.select().from(models), getGroupSettings()])
+  const [rows, settings, groups] = await Promise.all([
+    db.select().from(models),
+    getGroupSettings(),
+    getGroups(),
+  ])
   const byGroup = new Map(settings.map((s) => [s.groupId, s]))
 
   return (
@@ -20,7 +24,7 @@ export default async function OpsPricing() {
       </p>
 
       <div className="mt-8 space-y-8">
-        {PRODUCT_GROUPS.map((g) => {
+        {groups.map((g) => {
           const s = byGroup.get(g.id)
           const groupRows = rows
             .filter((r) => r.productGroup === g.id)
@@ -40,7 +44,7 @@ export default async function OpsPricing() {
               key={g.id}
               groupId={g.id}
               groupName={g.displayName}
-              ratio={s?.ratio ?? g.defaultRatio}
+              ratio={s?.ratio ?? g.ratio}
               status={s?.status ?? g.status}
               rows={groupRows}
             />

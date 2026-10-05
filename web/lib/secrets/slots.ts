@@ -1,46 +1,82 @@
 /**
- * 后台能填的密钥槽位。槽位名**和环境变量同名**,
- * 这样"库里没有就退回环境变量"的兜底逻辑不用再维护一张映射表。
+ * 密钥槽位 —— 后台「密钥配置」页上能填的那些框。
  *
- * 顺序就是页面上的显示顺序。
+ * 分两类:
+ *   固定槽位  上游地址、支付密钥。和产品分组无关,写死在这里
+ *   分组槽位  每个产品分组一把上游 key。**由分组表动态生成** ——
+ *             后台新开一条产品线,这里自动多一个框,不用改代码
+ *
+ * 槽位名和环境变量同名,这样「库里没有就退回环境变量」的兜底
+ * 不用再维护一张映射表。
  */
-export const SLOTS = [
+import { getGroups, defaultSlotForGroup } from '../pricing/groups'
+
+export { defaultSlotForGroup }
+
+export type SlotDef = {
+  slot: string
+  label: string
+  hint: string
+  /** true = 密文框,页面只显示尾号;false = 明文显示 */
+  secret: boolean
+  kind: 'upstream' | 'group' | 'payment'
+}
+
+/** 和分组无关的固定槽位 */
+export const FIXED_SLOTS: SlotDef[] = [
   {
     slot: 'NEWAPI_BASE_URL',
     label: '上游地址',
     hint: '直连上游填 https://zexitongxue.com(末尾不要带斜杠)',
-    secret: false,            // 不是密钥,页面上明文显示
-    group: 'claude',          // 「测试连接」时用哪个分组去探
+    secret: false,
+    kind: 'upstream',
   },
   {
-    slot: 'NEWAPI_SERVICE_KEY_CLAUDE',
-    label: 'Claude 组上游 key',
-    hint: '上游那把绑定 Claude 分组的 key。分组决定进货价,不能和 Codex 混用',
+    slot: 'NEWAPI_SERVICE_KEY',
+    label: '通用上游 key(兜底)',
+    hint: '分组没指定自己的 key 时用这把。只有一条产品线时填这个就够',
     secret: true,
-    group: 'claude',
-  },
-  {
-    slot: 'NEWAPI_SERVICE_KEY_CODEX',
-    label: 'Codex 组上游 key',
-    hint: '上游那把绑定 Codex 分组的 key',
-    secret: true,
-    group: 'codex',
+    kind: 'upstream',
   },
   {
     slot: 'CREEM_API_KEY',
     label: 'Creem API Key',
     hint: '测试阶段用 Test Mode 的 key,它只能配 test-api.creem.io',
     secret: true,
-    group: null,
+    kind: 'payment',
   },
   {
     slot: 'CREEM_WEBHOOK_SECRET',
     label: 'Creem Webhook 密钥',
     hint: '验回调签名用。填错会导致充值到不了账',
     secret: true,
-    group: null,
+    kind: 'payment',
   },
-] as const
+]
 
-export type SlotName = (typeof SLOTS)[number]['slot']
-export const SLOT_NAMES = SLOTS.map((s) => s.slot) as readonly string[]
+/**
+ * 当前全部槽位 = 固定槽位 + 每个分组一个。
+ * 分组没指定 secretSlot 的,按默认命名给一个。
+ */
+export async function allSlots(): Promise<SlotDef[]> {
+  const groups = await getGroups()
+  const groupSlots: SlotDef[] = groups.map((g) => ({
+    slot: g.secretSlot || defaultSlotForGroup(g.id),
+    label: `${g.displayName} 组上游 key`,
+    hint: `这条产品线用哪把上游 key。key 绑的上游分组决定进货价,不要和别的组混用`,
+    secret: true,
+    kind: 'group' as const,
+  }))
+  // 两个分组万一指到同一个槽位,只留一个框
+  const seen = new Set<string>()
+  return [...FIXED_SLOTS, ...groupSlots].filter((s) => {
+    if (seen.has(s.slot)) return false
+    seen.add(s.slot)
+    return true
+  })
+}
+
+/** 这个槽位名合法吗 —— 替代原来写死的 SLOT_NAMES 数组 */
+export async function isValidSlot(slot: string): Promise<boolean> {
+  return (await allSlots()).some((s) => s.slot === slot)
+}

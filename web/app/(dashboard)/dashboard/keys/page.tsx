@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { listKeys } from '@/lib/db/queries/keys'
 import { CreateKey } from '@/components/dashboard/create-key'
 import { deleteKey, toggleKey } from '@/app/actions/keys'
-import { liveGroups, getGroup } from '@/lib/pricing/groups'
+import { getGroups } from '@/lib/pricing/groups'
 import type { ProductGroupId } from '@/lib/pricing/types'
 
 export const metadata = { title: `API keys — ${site.name}` }
@@ -15,7 +15,11 @@ export default async function Keys() {
   const user = await getCurrentUser()
   if (!user) return null
   const keys = await listKeys(user.id)
-  const groups = liveGroups().map((g) => ({ id: g.id, displayName: g.displayName, blurb: g.blurb }))
+  const allGroups = await getGroups()
+  const groups = allGroups
+    .filter((g) => g.status === 'live')
+    .map((g) => ({ id: g.id, displayName: g.displayName, blurb: g.blurb }))
+  const nameOf = (id: string) => allGroups.find((g) => g.id === id)?.displayName ?? id
 
   return (
     <>
@@ -57,7 +61,7 @@ export default async function Keys() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-[var(--accent)]/12 px-1.5 py-0.5 font-mono text-[12px] text-[var(--accent)]">
-                      {getGroup(k.productGroup as ProductGroupId)?.displayName ?? k.productGroup}
+                      {nameOf(k.productGroup)}
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{k.keyPrefix}</td>

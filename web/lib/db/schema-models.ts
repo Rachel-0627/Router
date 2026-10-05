@@ -73,13 +73,38 @@ export type NewModelRow = typeof models.$inferInsert
  * 其余属性(显示名、介绍、降级链)仍在 lib/pricing/groups.ts 的代码里,
  * 因为那些改动频率极低,而且降级链和上游渠道配置强相关,不该让人随手改。
  */
+/**
+ * 产品分组 —— 用户建 key 时选的那个,决定这把 key 能调哪些模型、按什么倍率计价。
+ *
+ * 这张表就是分组的**唯一真相**:新增一条就是新开一条产品线,不用改代码。
+ * lib/pricing/groups.ts 里的常量只在表为空时兜底(全新环境首次启动)。
+ *
+ * ⚠️ 别和「上游分组」混了。上游分组(VIP/特价/自建)是进货渠道,
+ *    用户永远看不到,记在每个模型的 upstreamCny 里。
+ */
 export const productGroupSettings = pgTable('product_group_settings', {
-  /** claude | codex,和 ProductGroupId 一致 */
+  /** 小写短标识,如 claude / codex / glm。建了就不该再改 —— 已发出去的 key 绑着它 */
   groupId: text('group_id').primaryKey(),
+  /** 给用户看的名字,如 "Claude" */
+  displayName: text('display_name').notNull().default(''),
+  /** 一句话介绍,显示在定价页和建 key 页 */
+  blurb: text('blurb').notNull().default(''),
   /** 售价倍率:0.8 = 官方价八折 */
   ratio: doublePrecision('ratio').notNull(),
   /** live = 可购买;pending = 页面展示但不可用 */
   status: text('status').notNull().default('pending'),
+  /**
+   * 这个分组用哪把上游 key(app_secrets 的槽位名)。
+   * 空则退回通用的 NEWAPI_SERVICE_KEY。
+   */
+  secretSlot: text('secret_slot').notNull().default(''),
+  /**
+   * 转发给上游时用哪种协议。Claude 系走 anthropic,GPT 系走 openai。
+   * 发错格式上游会直接报错,所以必须按分组记住。
+   */
+  protocol: text('protocol').notNull().default('anthropic'),
+  /** 页面显示顺序,小的在前 */
+  sortOrder: doublePrecision('sort_order').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

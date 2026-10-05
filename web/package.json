@@ -23,7 +23,8 @@
     "ops:grant": "tsx --env-file=.env.local ops/grant-admin.ts",
     "seed:groups": "tsx --env-file=.env.local ops/seed-group-settings.ts",
     "creem:setup": "tsx --env-file=.env.local ops/creem-setup.ts",
-    "verify:creem": "tsx --env-file=.env.local ops/verify-creem.ts"
+    "verify:creem": "tsx --env-file=.env.local ops/verify-creem.ts",
+    "ops:backfill-groups": "tsx --env-file=.env.local ops/backfill-group-columns.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

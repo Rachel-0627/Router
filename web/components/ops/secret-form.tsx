@@ -13,6 +13,7 @@ export type SlotView = {
   label: string
   hint: string
   secret: boolean
+  kind: 'upstream' | 'group' | 'payment'
   configured: boolean
   source: 'db' | 'env' | 'none'
   last4: string | null

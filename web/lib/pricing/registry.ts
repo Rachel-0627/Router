@@ -12,7 +12,7 @@ import { db } from '../db'
 import { models, productGroupSettings, type ModelRow, type GroupSettingRow } from '../db/schema-models'
 import type { ModelPricing, ProductGroupId, UpstreamGroup, TokenPrices, PriceTier } from './types'
 import { SEED_MODELS } from './models'
-import { PRODUCT_GROUPS } from './groups'
+import { SEED_GROUPS } from './groups'
 import { logger } from '../logger'
 
 const CACHE_TTL_MS = 60_000
@@ -104,10 +104,11 @@ export async function getModelsForDisplay(): Promise<ModelPricing[]> {
     logger.error('读取模型失败,营销页降级为代码内初始清单', {
       detail: e instanceof Error ? e.message : String(e),
     })
-    const ratioOf = new Map(PRODUCT_GROUPS.map((g) => [g.id, g]))
+    // 库都读不到了,分组也只能用种子值 —— 门面页宁可显示稍旧的价格也不能白屏
+    const seedOf = new Map(SEED_GROUPS.map((g) => [g.id, g]))
     return SEED_MODELS.map((m) => {
-      const g = ratioOf.get(m.group)
-      return { ...m, ratio: g?.defaultRatio ?? 0.8, groupStatus: g?.status ?? 'pending' }
+      const g = seedOf.get(m.group)
+      return { ...m, ratio: g?.ratio ?? 0.8, groupStatus: g?.status ?? 'pending' }
     })
   }
 }

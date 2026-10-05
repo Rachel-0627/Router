@@ -80,22 +80,28 @@ ai-gateway/
 │   │   │       │                      门禁:账号 role=admin 才进,
 │   │   │       │                      授权只能命令行 ops:grant ——
 │   │   │       │                      网页提权入口本身就是漏洞温床
+│   │   │       ├── groups/            产品分组(自定义,新建=新开产品线) ✅
 │   │   │       └── credentials/       密钥配置(加密存库,存完即生效) ✅
+│   │   │                              槽位按分组自动生成,
+│   │   │                              另含任意 key×任意模型的实测面板
 │   │   │
 │   │   └── api/                   ── 服务端接口(BFF) ──
 │   │       │  (认证/Key/充值都用 Server Action,不走 REST,少一层)
 │   │       │   app/actions/auth.ts     注册/登录/登出            ✅
 │   │       │   app/actions/keys.ts     Key 增删改禁              ✅
 │   │       │   app/actions/billing.ts  发起充值                  ✅
-│   │       │   app/actions/ops-secrets.ts 密钥存取/测连通/轮换    ✅
+│   │       │   app/actions/ops-secrets.ts 密钥存取/轮换          ✅
+│   │       │   app/actions/ops-upstream-test.ts 上游实测(不绑分组) ✅
+│   │       │   app/actions/ops-groups.ts  产品分组增删改          ✅
 │   │       └── webhook/
 │   │           └── [provider]/[secret]/  支付回调(路径带密钥+回查校验) ✅
 │   │
 │   ├── lib/
 │   │   ├── secrets/               运维密钥:加密存库,保存即生效   ✅
-│   │   │   ├── slots.ts               能填哪些槽位(名字=环境变量名) ✅
 │   │   │   ├── crypto.ts              AES-256-GCM 加解密         ✅
 │   │   │   ├── keys.ts                KEK 管理,用指纹而非版本号   ✅
+│   │   │   ├── slots.ts               ⚠️ 槽位 = 固定几个 + 每分组一个,
+│   │   │   │                              分组加一条这里自动多一个框
 │   │   │   └── store.ts               读写+60秒缓存+环境变量兜底  ✅
 │   │   │                              ⚠️ KEK 放环境变量,**故意不进库**
 │   │   │                                 ——钥匙进库=挂在锁上
@@ -133,10 +139,12 @@ ai-gateway/
 │   │   │       ├── ledger.ts          流水与订单列表            ✅
 │   │   │       ├── usage.ts           用量聚合                  ✅
 │   │   │       └── ops.ts             运营指标(可支配现金等)     ✅
-│   │   ├── pricing/               ⭐ 两条产品线,每条独立倍率
+│   │   ├── pricing/               ⭐ 产品线数量不限,每条独立倍率
 │   │   │   ├── types.ts               类型(含长上下文分档)       ✅
-│   │   │   ├── groups.ts              Claude(八折·live)/         ✅
-│   │   │   │                          Codex(八折·pending 待验注入)
+│   │   │   ├── groups.ts              产品分组:**查库**,后台可增删改 ✅
+│   │   │   │                          代码里的 SEED_GROUPS 只在表
+│   │   │   │                          为空时兜底,不是配置入口。
+│   │   │   │                          每组带:倍率/上架/协议/密钥槽位
 │   │   │   ├── models/claude.ts       5 个 Claude               ✅
 │   │   │   ├── models/codex.ts        6 个 GPT(luna 故意不上架) ✅
 │   │   │   ├── models/index.ts        汇总                      ✅

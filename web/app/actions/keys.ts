@@ -40,7 +40,7 @@ export async function createKey(_prev: CreateKeyState, formData: FormData): Prom
   }
 
   // 分组必须是当前可购买的,不能靠前端传什么就信什么
-  const groups = liveGroups()
+  const groups = await liveGroups()
   const requested = String(formData.get('group') ?? groups[0]?.id ?? 'claude')
   const group = groups.find((g) => g.id === requested)
   if (!group) return { ok: false, error: 'That model group is not available.' }

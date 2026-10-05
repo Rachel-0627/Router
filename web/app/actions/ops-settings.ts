@@ -17,6 +17,7 @@ import { hasOpsAccess } from '@/lib/auth/ops'
 import { invalidateModelCache, rowToPricing } from '@/lib/pricing/registry'
 import { worstCaseMarginPct } from '@/lib/pricing/calculate'
 import { MIN_WORST_MARGIN_PCT } from '@/lib/pricing/loss-guard'
+import { isValidGroupId } from '@/lib/pricing/groups'
 import { logger } from '@/lib/logger'
 import type { ProductGroupId } from '@/lib/pricing/types'
 
@@ -24,7 +25,8 @@ import type { ProductGroupId } from '@/lib/pricing/types'
 export type SettingsState = { ok: boolean; message: string } | undefined
 
 const Schema = z.object({
-  groupId: z.enum(['claude', 'codex']),
+  // 分组名单是用户自定义的,不能写死枚举;合法性在下面用 isValidGroupId 查库
+  groupId: z.string().min(1).max(32),
   // 上限 1 = 不允许卖得比官方还贵;下限 0.05 防手滑打成 0.008
   ratio: z.coerce.number().min(0.05, { error: '倍率不能低于 0.05' }).max(1, { error: '倍率不能超过 1(不能比官方还贵)' }),
   status: z.enum(['live', 'pending']),
@@ -57,6 +59,10 @@ export async function updateGroupSettings(_prev: SettingsState, formData: FormDa
   })
   if (!parsed.success) return { ok: false, message: z.prettifyError(parsed.error).slice(0, 160) }
   const { groupId, ratio, status } = parsed.data
+
+  // 分组必须真实存在。z.enum 改成 z.string 之后这一步不能省 ——
+  // 否则随便传个字符串就能往分组表里插一条脏数据。
+  if (!(await isValidGroupId(groupId))) return { ok: false, message: `分组「${groupId}」不存在` }
 
   // ── 赔本护栏:用新倍率试算,有模型跌破阈值就拒绝 ──
   const { losers } = await previewRatio(groupId, ratio)

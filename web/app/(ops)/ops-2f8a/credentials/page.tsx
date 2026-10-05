@@ -1,4 +1,4 @@
-import { SLOTS } from '@/lib/secrets/slots'
+import { allSlots } from '@/lib/secrets/slots'
 import { slotStatuses } from '@/lib/secrets/store'
 import { currentFingerprint, hasKek, hasOldKek } from '@/lib/secrets/keys'
 import { SecretForm, type SlotView } from '@/components/ops/secret-form'
@@ -11,16 +11,17 @@ export const dynamic = 'force-dynamic'
 const fmt = (d: Date | null) => (d ? new Date(d).toLocaleString('zh-CN') : null)
 
 export default async function OpsCredentials() {
-  const statuses = await slotStatuses()
+  const [defs, statuses] = await Promise.all([allSlots(), slotStatuses()])
   const bySlot = new Map(statuses.map((s) => [s.slot, s]))
 
-  const views: SlotView[] = SLOTS.map((def) => {
+  const views: SlotView[] = defs.map((def) => {
     const st = bySlot.get(def.slot)
     return {
       slot: def.slot,
       label: def.label,
       hint: def.hint,
       secret: def.secret,
+      kind: def.kind,
       configured: st?.configured ?? false,
       source: st?.source ?? 'none',
       last4: st?.last4 ?? null,
@@ -30,8 +31,9 @@ export default async function OpsCredentials() {
     }
   })
 
-  const upstream = views.filter((v) => v.slot.startsWith('NEWAPI_'))
-  const payment = views.filter((v) => v.slot.startsWith('CREEM_'))
+  const upstream = views.filter((v) => v.kind === 'upstream')
+  const groupKeys = views.filter((v) => v.kind === 'group')
+  const payment = views.filter((v) => v.kind === 'payment')
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-10">
@@ -59,10 +61,22 @@ export default async function OpsCredentials() {
           <SecretForm key={v.slot} view={v} />
         ))}
       </div>
-      <div className="mt-4">
+
+      <h2 className="mt-10 text-lg font-semibold">各产品分组的 key</h2>
+      <p className="mt-1.5 text-[13px] text-[var(--muted)]">
+        每个产品分组一把。<a href="/ops-2f8a/groups" className="underline underline-offset-2">在分组管理里</a>
+        新开一条产品线，这里会自动多一个框。
+      </p>
+      <div className="mt-4 space-y-4">
+        {groupKeys.map((v) => (
+          <SecretForm key={v.slot} view={v} />
+        ))}
+      </div>
+
+      <div className="mt-6">
         <UpstreamTest
-          keys={upstream
-            .filter((v) => v.slot !== 'NEWAPI_BASE_URL')
+          keys={views
+            .filter((v) => v.secret && v.kind !== 'payment')
             .map((v) => ({ slot: v.slot, label: v.label, configured: v.configured }))}
         />
       </div>

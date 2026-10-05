@@ -1,6 +1,6 @@
 import { site } from '@/lib/site'
 import { pricingRows, savingsPct, fmtPrice } from '@/lib/pricing/calculate'
-import { PRODUCT_GROUPS } from '@/lib/pricing/groups'
+import { getGroups } from '@/lib/pricing/groups'
 import type { PricingRow } from '@/lib/pricing/calculate'
 
 export const metadata = { title: `Pricing — ${site.name}` }
@@ -91,7 +91,8 @@ function GroupTable({ rows, saving }: { rows: PricingRow[]; saving: number }) {
 }
 
 export default async function Pricing() {
-  const rows = await pricingRows()
+  // 分组名单来自数据库 —— 后台新开一条产品线,定价页自动多一段
+  const [rows, groups] = await Promise.all([pricingRows(), getGroups()])
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-16">
@@ -101,7 +102,7 @@ export default async function Pricing() {
         subscription, no minimum monthly spend.
       </p>
 
-      {PRODUCT_GROUPS.map((g) => {
+      {groups.map((g) => {
         const groupRows = rows.filter((m) => m.group === g.id)
         if (groupRows.length === 0) return null
         // 倍率和上架状态都来自数据库(挂在模型上),不是代码里的默认值

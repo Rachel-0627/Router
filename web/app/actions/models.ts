@@ -1,4 +1,5 @@
 'use server'
+import { isValidGroupId } from '@/lib/pricing/groups'
 /**
  * 模型目录管理(运营后台专用)。
  *
@@ -86,7 +87,8 @@ export async function deleteModel(formData: FormData): Promise<ModelActionState>
 const MetaSchema = z.object({
   displayName: z.string().trim().min(1).max(60),
   blurb: z.string().trim().max(200),
-  productGroup: z.enum(['claude', 'codex']),
+  // 同上:分组存在性查库校验,不写死枚举
+  productGroup: z.string().min(1).max(32),
   contextWindow: z.coerce.number().int().positive().max(10_000_000),
   sortOrder: z.coerce.number().int().min(0).max(9999),
   recommended: z.coerce.boolean(),
@@ -108,6 +110,11 @@ export async function updateModelMeta(formData: FormData): Promise<ModelActionSt
     legacy: formData.get('legacy') === 'on',
   })
   if (!parsed.success) return { ok: false, message: '填写有误:' + z.prettifyError(parsed.error).slice(0, 120) }
+
+  // 分组必须真实存在 —— z.enum 换成 z.string 后这一步不能省
+  if (!(await isValidGroupId(parsed.data.productGroup))) {
+    return { ok: false, message: `分组「${parsed.data.productGroup}」不存在` }
+  }
 
   await db.update(models).set({ ...parsed.data, updatedAt: new Date() }).where(eq(models.id, id))
   invalidateModelCache()

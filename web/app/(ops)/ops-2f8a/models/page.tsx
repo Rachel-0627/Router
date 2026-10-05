@@ -1,7 +1,7 @@
 import { getAllModelRows, rowToPricing, getGroupSettings } from '@/lib/pricing/registry'
 import { sellPrices, grossMarginPct, worstCaseMarginPct, fallbackChain, primaryGroup } from '@/lib/pricing/calculate'
 import { UPSTREAM_GROUP_LABEL } from '@/lib/pricing/types'
-import { getGroup } from '@/lib/pricing/groups'
+import { getGroups } from '@/lib/pricing/groups'
 import { listImportable } from '@/app/actions/model-import'
 import { ModelRowActions } from '@/components/ops/model-row-actions'
 import { SyncPrices } from '@/components/ops/sync-prices'
@@ -13,7 +13,13 @@ export const dynamic = 'force-dynamic'
 const pct = (n: number | null) => (n === null ? '—' : `${n.toFixed(1)}%`)
 
 export default async function OpsModels() {
-  const [rows, settings, imp] = await Promise.all([getAllModelRows(), getGroupSettings(), listImportable()])
+  const [rows, settings, imp, groups] = await Promise.all([
+    getAllModelRows(),
+    getGroupSettings(),
+    listImportable(),
+    getGroups(),
+  ])
+  const groupName = (id: string) => groups.find((g) => g.id === id)?.displayName ?? id
   const groupRatioOf = new Map(settings.map((s) => [s.groupId, s.ratio]))
   const { candidates, error } = imp
 
@@ -59,7 +65,7 @@ export default async function OpsModels() {
                     <div className="mt-0.5 text-xs text-[var(--muted)]">{r.displayName}</div>
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    {getGroup(m.group)?.displayName ?? m.group}
+                    {groupName(m.group)}
                     <div className="text-[var(--muted)]">
                       ×{m.ratio}
                       {r.ratioOverride !== null && (

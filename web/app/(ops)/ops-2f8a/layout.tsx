@@ -4,6 +4,7 @@ import { opsAccessState } from '@/lib/auth/ops'
 const NAV = [
   { href: '/ops-2f8a', label: '总览' },
   { href: '/ops-2f8a/models', label: '模型目录' },
+  { href: '/ops-2f8a/groups', label: '产品分组' },
   { href: '/ops-2f8a/pricing', label: '定价倍率' },
   { href: '/ops-2f8a/users', label: '用户' },
   { href: '/ops-2f8a/credentials', label: '密钥配置' },

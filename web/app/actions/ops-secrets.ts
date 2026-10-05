@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth'
 import { hasOpsAccess } from '@/lib/auth/ops'
 import { setSecret, deleteSecret, reencryptAll, getSecret } from '@/lib/secrets/store'
-import { SLOT_NAMES, type SlotName } from '@/lib/secrets/slots'
+import { isValidSlot } from '@/lib/secrets/slots'
 import { logger } from '@/lib/logger'
 
 export type SecretState = { ok: boolean; message: string } | undefined
@@ -27,7 +27,8 @@ async function requireAdmin(): Promise<string> {
 }
 
 const SaveSchema = z.object({
-  slot: z.enum(SLOT_NAMES as [string, ...string[]]),
+  // 槽位名单是动态的(每个产品分组一个),不能写死枚举;存在性在下面查
+  slot: z.string().min(1).max(64),
   // 上限防手滑粘进整个文件;下限挡空提交
   value: z.string().min(4, { error: '值太短了' }).max(2000, { error: '值太长,确认没粘错东西?' }),
 })
@@ -48,6 +49,7 @@ export async function saveSecret(_prev: SecretState, form: FormData): Promise<Se
     return { ok: false, message: parsed.error.issues[0]?.message ?? '输入有误' }
   }
   const { slot, value } = parsed.data
+  if (!(await isValidSlot(slot))) return { ok: false, message: `未知槽位「${slot}」` }
 
   // 地址类槽位额外校验,免得填个 "zexitongxue.com" 导致转发时拼出畸形 URL
   if (slot === 'NEWAPI_BASE_URL') {
@@ -57,7 +59,7 @@ export async function saveSecret(_prev: SecretState, form: FormData): Promise<Se
   }
 
   try {
-    await setSecret(slot as SlotName, value, userId)
+    await setSecret(slot, value, userId)
   } catch (e) {
     // 把真实原因记日志,但只给用户看一句能照着做的话
     logger.error('保存密钥失败', { slot, detail: e instanceof Error ? e.message : String(e) })
@@ -79,9 +81,9 @@ export async function removeSecret(_prev: SecretState, form: FormData): Promise<
     return { ok: false, message: '需要管理员权限' }
   }
   const slot = (form.get('slot') ?? '').toString()
-  if (!SLOT_NAMES.includes(slot)) return { ok: false, message: '未知槽位' }
+  if (!(await isValidSlot(slot))) return { ok: false, message: '未知槽位' }
 
-  await deleteSecret(slot as SlotName, userId)
+  await deleteSecret(slot, userId)
   revalidatePath('/ops-2f8a/credentials')
   return { ok: true, message: '已删除。该槽位会退回读环境变量。' }
 }

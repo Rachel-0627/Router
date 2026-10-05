@@ -14,9 +14,7 @@ import { env } from '../env'
 import { logger } from '../logger'
 import { encrypt, decrypt, last4 } from './crypto'
 import { currentKek, kekByFingerprint, fingerprint, currentFingerprint } from './keys'
-import { SLOTS, type SlotName } from './slots'
-
-export { SLOTS, type SlotName }
+import { allSlots } from './slots'
 
 
 
@@ -114,11 +112,11 @@ export type SlotStatus = {
 }
 
 export async function slotStatuses(): Promise<SlotStatus[]> {
-  const rows = await db.select().from(appSecrets)
+  const [rows, slots] = await Promise.all([db.select().from(appSecrets), allSlots()])
   const bySlot = new Map(rows.map((r) => [r.slot, r]))
   const curFp = currentFingerprint()
 
-  return SLOTS.map(({ slot }) => {
+  return slots.map(({ slot }) => {
     const row = bySlot.get(slot)
     if (!row) {
       const envVal = fromEnv(slot)

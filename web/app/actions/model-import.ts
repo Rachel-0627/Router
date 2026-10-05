@@ -1,4 +1,5 @@
 'use server'
+import { isValidGroupId } from '@/lib/pricing/groups'
 /**
  * 从上游新增模型 —— 价格全部由上游填,你只填展示信息。
  * 这样做的原因见 lib/pricing/import-upstream.ts:手输 12 个价格数字必然出错。
@@ -33,7 +34,8 @@ const AddSchema = z.object({
   modelId: z.string().trim().min(1).max(80).regex(/^[a-zA-Z0-9._-]+$/, { error: '模型 ID 只能用字母数字和 . _ -' }),
   displayName: z.string().trim().min(1).max(60),
   blurb: z.string().trim().max(200),
-  productGroup: z.enum(['claude', 'codex']),
+  // 同上:分组存在性查库校验,不写死枚举
+  productGroup: z.string().min(1).max(32),
   contextWindow: z.coerce.number().int().positive().max(10_000_000),
 })
 
@@ -50,6 +52,11 @@ export async function addModelFromUpstream(_prev: ImportState, formData: FormDat
   })
   if (!parsed.success) return { ok: false, message: '填写有误:' + z.prettifyError(parsed.error).slice(0, 140) }
   const d = parsed.data
+
+  // 分组必须真实存在 —— z.enum 换成 z.string 后这一步不能省
+  if (!(await isValidGroupId(d.productGroup))) {
+    return { ok: false, message: `分组「${d.productGroup}」不存在` }
+  }
 
   try {
     // 价格**只从上游取**,不接受表单传来的价格

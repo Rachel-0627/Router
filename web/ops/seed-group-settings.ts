@@ -1,13 +1,22 @@
 /** 把 groups.ts 里的默认倍率和状态灌进库(一次性)。之后以库里的为准,后台可改。 */
 import { db } from '../lib/db'
 import { productGroupSettings } from '../lib/db/schema-models'
-import { PRODUCT_GROUPS } from '../lib/pricing/groups'
+import { SEED_GROUPS } from '../lib/pricing/groups'
 
 async function main() {
-  for (const g of PRODUCT_GROUPS) {
+  for (const g of SEED_GROUPS) {
     await db
       .insert(productGroupSettings)
-      .values({ groupId: g.id, ratio: g.defaultRatio, status: g.status })
+      .values({
+        groupId: g.id,
+        displayName: g.displayName,
+        blurb: g.blurb,
+        ratio: g.ratio,
+        status: g.status,
+        secretSlot: g.secretSlot,
+        protocol: g.protocol,
+        sortOrder: g.sortOrder,
+      })
       .onConflictDoNothing({ target: productGroupSettings.groupId })
   }
   const rows = await db.select().from(productGroupSettings)

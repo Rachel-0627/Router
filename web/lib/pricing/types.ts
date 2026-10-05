@@ -73,7 +73,12 @@ export type ModelPricing = {
 }
 
 /** 产品分组 —— 用户在控制台看到并选择的那个 */
-export type ProductGroupId = 'claude' | 'codex'
+/**
+ * 产品分组标识。**不是联合类型** —— 分组由用户在后台自定义,
+ * 名单存在 product_group_settings 表里,运行时才知道。
+ * 校验用 isValidGroupId(),别再写 z.enum。
+ */
+export type ProductGroupId = string
 
 /** 种子数据用的类型:倍率和上架状态是运行时挂上去的,静态清单里没有 */
 export type ModelSeed = Omit<ModelPricing, 'ratio' | 'groupStatus'>

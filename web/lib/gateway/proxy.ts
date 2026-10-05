@@ -18,7 +18,7 @@ import { getBalanceMicroUsd } from '../credits'
 import { checkRate } from '../rate-limit'
 import { recordUsage, type MeterContext } from './meter'
 import { getModelById } from '../pricing/registry'
-import { getGroup } from '../pricing/groups'
+import { getGroup, type ProductGroup } from '../pricing/groups'
 import type { ProductGroupId } from '../pricing/types'
 import { SseUsageCollector, usageFromJson } from './usage'
 import { getSecret } from '../secrets/store'
@@ -38,13 +38,15 @@ function apiError(status: number, type: string, message: string, extraHeaders?: 
 /**
  * 按产品分组选服务令牌。令牌上绑的上游分组决定往哪批渠道路由。
  *
- * 取值顺序:后台填的(数据库) → 环境变量。
- * getSecret 自己就带这个兜底,所以这里只管挑槽位。
- * 没配分组专属的就退回通用令牌 —— 单分组起步时不用配两份。
+ * 槽位名**存在分组自己身上**(product_group_settings.secret_slot),
+ * 不再按分组标识写死 —— 分组是用户在后台自定义的,写死就加不了新产品线。
+ *
+ * 取值顺序:分组指定的槽位 → 通用令牌。
+ * getSecret 内部还带「库里没有就读环境变量」的兜底,所以这里只管挑槽位。
  */
-async function serviceKeyFor(group: ProductGroupId): Promise<string | undefined> {
-  const slot = group === 'codex' ? 'NEWAPI_SERVICE_KEY_CODEX' : 'NEWAPI_SERVICE_KEY_CLAUDE'
-  const byGroup = await getSecret(slot)
+async function serviceKeyFor(group: ProductGroup | undefined): Promise<string | undefined> {
+  const slot = group?.secretSlot
+  const byGroup = slot ? await getSecret(slot) : undefined
   return byGroup || env.NEWAPI_SERVICE_KEY || undefined
 }
 
@@ -101,27 +103,29 @@ export async function handleProxy(req: Request, upstreamPath: string): Promise<R
     return apiError(400, 'invalid_request_error', 'Request body must be valid JSON.')
   }
 
-  const keyGroup = (key.productGroup === 'codex' ? 'codex' : 'claude') as ProductGroupId
+  // key 上存的就是分组标识,分组名单是用户自定义的,不能再写死映射
+  const keyGroup: ProductGroupId = key.productGroup
   const model = await getModelById(requestedModel)
   if (!model) {
     return apiError(404, 'not_found_error', `Unknown model "${requestedModel}".`)
   }
   // key 绑定分组,跨组调用直接拒绝 —— 否则计费倍率会用错
+  const [ownGroup, wantGroup] = await Promise.all([getGroup(keyGroup), getGroup(model.group)])
+  const ownName = ownGroup?.displayName ?? keyGroup
   if (model.group !== keyGroup) {
-    const want = getGroup(model.group)?.displayName ?? model.group
     return apiError(
       403,
       'permission_error',
-      `This key is for the ${getGroup(keyGroup)?.displayName ?? keyGroup} group and cannot call "${requestedModel}". Create a ${want} key instead.`,
+      `This key is for the ${ownName} group and cannot call "${requestedModel}". Create a ${wantGroup?.displayName ?? model.group} key instead.`,
     )
   }
   // 分组是否上架以**数据库**为准(后台可改),不看代码里的默认值
   if (model.groupStatus !== 'live') {
-    return apiError(403, 'permission_error', `The ${getGroup(keyGroup)?.displayName ?? keyGroup} group is not available yet.`)
+    return apiError(403, 'permission_error', `The ${ownName} group is not available yet.`)
   }
 
   const [serviceKey, baseUrl] = await Promise.all([
-    serviceKeyFor(keyGroup),
+    serviceKeyFor(ownGroup),
     getSecret('NEWAPI_BASE_URL'),
   ])
   if (!baseUrl || !serviceKey) {
