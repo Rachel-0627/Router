@@ -59,7 +59,7 @@ export default async function OpsCredentials() {
           <SecretForm key={v.slot} view={v} />
         ))}
       </div>
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 space-y-3">
         <UpstreamTest group="claude" label="Claude 组" />
         <UpstreamTest group="codex" label="Codex 组" />
       </div>
