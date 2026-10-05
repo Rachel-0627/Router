@@ -9,7 +9,17 @@ import { useActionState } from 'react'
 import { testUpstream } from '@/app/actions/ops-upstream-test'
 import { type SecretState } from '@/app/actions/ops-secrets'
 
-export type KeyChoice = { slot: string; label: string; configured: boolean }
+export type KeyChoice = {
+  slot: string
+  label: string
+  configured: boolean
+  /** 这把 key 属于哪条产品线 —— 跨组调会一直挂到超时,必须让人一眼看见 */
+  groupName?: string
+  /** 该产品线的一个真实模型名,拿来当输入框的默认值,省得手打错 */
+  sampleModel?: string
+  /** 该产品线该用哪种协议 */
+  protocol?: string
+}
 
 export function UpstreamTest({ keys }: { keys: KeyChoice[] }) {
   const [state, action, pending] = useActionState<SecretState, FormData>(testUpstream, undefined)

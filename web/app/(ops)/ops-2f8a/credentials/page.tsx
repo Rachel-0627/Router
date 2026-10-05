@@ -3,6 +3,7 @@ import { slotStatuses } from '@/lib/secrets/store'
 import { currentFingerprint, hasKek, hasOldKek } from '@/lib/secrets/keys'
 import { getUpstreams } from '@/lib/upstreams'
 import { getGroups } from '@/lib/pricing/groups'
+import { getModelsForDisplay } from '@/lib/pricing/registry'
 import { SecretForm, type SlotView } from '@/components/ops/secret-form'
 import { UpstreamForm, type UpstreamView } from '@/components/ops/upstream-form'
 import { UpstreamTest } from '@/components/ops/upstream-test'
@@ -23,11 +24,12 @@ export const maxDuration = 60
 const fmt = (d: Date | null) => (d ? new Date(d).toLocaleString('zh-CN') : null)
 
 export default async function OpsCredentials() {
-  const [defs, statuses, ups, groups] = await Promise.all([
+  const [defs, statuses, ups, groups, allModels] = await Promise.all([
     allSlots(),
     slotStatuses(),
     getUpstreams(),
     getGroups(),
+    getModelsForDisplay(),
   ])
   const bySlot = new Map(statuses.map((s) => [s.slot, s]))
 
@@ -65,9 +67,22 @@ export default async function OpsCredentials() {
       })),
   }))
 
+  // 每把 key 带上它属于哪条产品线、该线的一个真实模型名和协议 ——
+  // 跨组搭配会一直挂到超时,让人一开始就填对比事后报错好
   const testKeys = views
     .filter((v) => v.secret && v.kind !== 'payment')
-    .map((v) => ({ slot: v.slot, label: v.label, configured: v.configured }))
+    .map((v) => {
+      const g = groups.find((x) => x.secretSlot === v.slot)
+      const sample = g ? allModels.find((m) => m.group === g.id) : undefined
+      return {
+        slot: v.slot,
+        label: v.label,
+        configured: v.configured,
+        groupName: g?.displayName,
+        sampleModel: sample?.upstreamId,
+        protocol: g?.protocol,
+      }
+    })
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-10">

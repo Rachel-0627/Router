@@ -18,6 +18,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { hasOpsAccess } from '@/lib/auth/ops'
 import { getSecret } from '@/lib/secrets/store'
 import { getGroups } from '@/lib/pricing/groups'
+import { getModels } from '@/lib/pricing/registry'
 import { getUpstream, authHeaders, envFallbackBaseUrl, type AuthStyle } from '@/lib/upstreams'
 import { logger } from '@/lib/logger'
 
@@ -62,6 +63,24 @@ export async function runInjectionTest(_prev: InjectionState, form: FormData): P
   const key = await getSecret(keySlot)
   if (!key) return { ok: false, message: `「${keySlot}」还没填值。` }
 
+  // 上游的 key 是绑分组的:拿 Claude 的 key 调 GLM 模型,上游会一直挂着
+  // 直到超时。与其让人干等,不如当场说清楚。
+  const groups = await getGroups()
+  const own = groups.find((g) => g.secretSlot === keySlot)
+  if (own) {
+    const belongs = (await getModels().catch(() => []))
+      .filter((m) => m.group === own.id)
+      .some((m) => m.upstreamId === model || m.id === model)
+    const elsewhere = (await getModels().catch(() => [])).find((m) => m.upstreamId === model || m.id === model)
+    if (!belongs && elsewhere) {
+      const other = groups.find((g) => g.id === elsewhere.group)
+      return {
+        ok: false,
+        message: `搭配不对:「${own.displayName}」的 key 调不了 ${model} —— 这个模型属于「${other?.displayName ?? elsewhere.group}」。上游的 key 绑分组,跨组调会一直挂到超时。请改选「${other?.displayName ?? elsewhere.group} 组上游 key」。`,
+      }
+    }
+  }
+
   const url = `${route.baseUrl}${isAnthropic ? '/v1/messages' : '/v1/chat/completions'}`
 
   /** 探针结果。ok=false 表示**请求没成功**,这时它的内容不能拿来下任何结论 */
@@ -83,7 +102,10 @@ export async function runInjectionTest(_prev: InjectionState, form: FormData): P
         ...(isAnthropic ? { 'anthropic-version': '2023-06-01' } : {}),
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(40_000),
+      // ⚠️ 三个探针**串行**跑,单个超时 × 3 必须塞得进页面声明的 maxDuration(60 秒),
+      //    否则函数先被掐断,报出来的错和"上游不可用"长得一模一样。
+      //    15 × 3 = 45 秒,留 15 秒余量。
+      signal: AbortSignal.timeout(15_000),
     })
     const text = await res.text()
     if (!res.ok) {
@@ -167,6 +189,9 @@ export async function runInjectionTest(_prev: InjectionState, form: FormData): P
   } catch (e) {
     const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     logger.error('注入验证失败', { keySlot, model, url, detail })
-    return { ok: false, message: `测试没跑完。实际请求:${url}(走 ${route.via})。底层报错:${detail}` }
+    const hint = /timeout|abort/i.test(detail)
+      ? `等了 15 秒没响应。最常见的原因是**这把 key 调不了 ${model}**(上游 key 绑分组,跨组调会一直挂着),其次是上游正好不可用。`
+      : ''
+    return { ok: false, message: `测试没跑完。${hint} 实际请求:${url}(走 ${route.via})。底层报错:${detail}` }
   }
 }
