@@ -91,3 +91,63 @@ export async function testUpstream(_prev: SecretState, form: FormData): Promise<
     return { ok: false, message: '连不上上游 —— 检查地址拼写,或上游正好不可用。' }
   }
 }
+
+/**
+ * 拉取上游可用模型清单 —— 走标准的 /v1/models,用 sk- key 就能调。
+ *
+ * 和「填模型名硬试」互补:这个直接告诉你**这把 key 到底能调哪些模型**,
+ * 不用一个个猜名字。上游控制台的 /api/pricing 要账号会话令牌,
+ * 我们只有 API key,拿不到;但模型名单这个标准端点是认 API key 的。
+ *
+ * ⚠️ 它只给名字,**不给进货价**。价格还得去上游价格页看。
+ */
+export async function listUpstreamModels(
+  _prev: SecretState,
+  form: FormData,
+): Promise<SecretState> {
+  try {
+    await requireAdmin()
+  } catch {
+    return { ok: false, message: '需要管理员权限' }
+  }
+
+  const keySlot = (form.get('keySlot') ?? '').toString().trim()
+  const filter = (form.get('filter') ?? '').toString().trim().toLowerCase()
+  if (!keySlot) return { ok: false, message: '请选一把 key。' }
+
+  const base = await getSecret('NEWAPI_BASE_URL')
+  if (!base) return { ok: false, message: '先填上游地址。' }
+  const key = await getSecret(keySlot)
+  if (!key) return { ok: false, message: `「${keySlot}」还没填值。` }
+
+  try {
+    const res = await fetch(`${base.replace(/\/$/, '')}/v1/models`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!res.ok) {
+      const raw = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160)
+      return { ok: false, message: `上游返回 ${res.status}。${raw}` }
+    }
+
+    const body = (await res.json()) as { data?: { id?: unknown }[] }
+    let ids = (body.data ?? [])
+      .map((m) => (typeof m.id === 'string' ? m.id : ''))
+      .filter(Boolean)
+      .sort()
+    const total = ids.length
+    if (filter) ids = ids.filter((id) => id.toLowerCase().includes(filter))
+
+    logger.info('拉取上游模型清单', { keySlot, total, matched: ids.length, filter })
+    if (ids.length === 0) {
+      return { ok: false, message: `这把 key 能调 ${total} 个模型,但没有匹配「${filter}」的。` }
+    }
+    return {
+      ok: true,
+      message: `这把 key 能调 ${total} 个模型${filter ? `,匹配「${filter}」的 ${ids.length} 个` : ''}:${ids.join('  ')}`,
+    }
+  } catch (e) {
+    logger.error('拉取上游模型清单失败', { keySlot, detail: e instanceof Error ? e.message : String(e) })
+    return { ok: false, message: '连不上上游 —— 检查地址,或上游正好不可用。' }
+  }
+}

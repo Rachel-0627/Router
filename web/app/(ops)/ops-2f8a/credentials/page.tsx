@@ -3,6 +3,7 @@ import { slotStatuses } from '@/lib/secrets/store'
 import { currentFingerprint, hasKek, hasOldKek } from '@/lib/secrets/keys'
 import { SecretForm, type SlotView } from '@/components/ops/secret-form'
 import { UpstreamTest } from '@/components/ops/upstream-test'
+import { UpstreamModels } from '@/components/ops/upstream-models'
 import { KekPanel } from '@/components/ops/kek-panel'
 
 export const metadata = { title: 'ops · credentials', robots: { index: false, follow: false } }
@@ -30,6 +31,10 @@ export default async function OpsCredentials() {
       unreadable: st?.unreadable ?? false,
     }
   })
+
+  const testKeys = views
+    .filter((v) => v.secret && v.kind !== 'payment')
+    .map((v) => ({ slot: v.slot, label: v.label, configured: v.configured }))
 
   const upstream = views.filter((v) => v.kind === 'upstream')
   const groupKeys = views.filter((v) => v.kind === 'group')
@@ -73,12 +78,9 @@ export default async function OpsCredentials() {
         ))}
       </div>
 
-      <div className="mt-6">
-        <UpstreamTest
-          keys={views
-            .filter((v) => v.secret && v.kind !== 'payment')
-            .map((v) => ({ slot: v.slot, label: v.label, configured: v.configured }))}
-        />
+      <div className="mt-6 space-y-4">
+        <UpstreamModels keys={testKeys} />
+        <UpstreamTest keys={testKeys} />
       </div>
 
       <h2 className="mt-10 text-lg font-semibold">支付</h2>
