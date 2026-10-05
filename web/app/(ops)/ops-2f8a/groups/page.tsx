@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { models } from '@/lib/db/schema-models'
 import { apiKeys } from '@/lib/db/schema'
 import { getGroups } from '@/lib/pricing/groups'
+import { slotStatuses } from '@/lib/secrets/store'
 import { defaultSlotForGroup } from '@/lib/secrets/slots'
 import { GroupForm, type GroupView } from '@/components/ops/group-form'
 
@@ -10,7 +11,9 @@ export const metadata = { title: 'ops · groups', robots: { index: false, follow
 export const dynamic = 'force-dynamic'
 
 export default async function OpsGroups() {
-  const groups = await getGroups()
+  const [groups, statuses] = await Promise.all([getGroups(), slotStatuses()])
+  // key 填没填要显示在分组上 —— 不然用户不知道还差这一步
+  const filled = new Set(statuses.filter((s) => s.configured).map((s) => s.slot))
 
   // 每组挂了多少模型、多少有效 key —— 删除前要看这个
   const views: GroupView[] = await Promise.all(
@@ -31,6 +34,7 @@ export default async function OpsGroups() {
         protocol: g.protocol,
         secretSlot: g.secretSlot || defaultSlotForGroup(g.id),
         sortOrder: g.sortOrder,
+        keyFilled: filled.has(g.secretSlot || defaultSlotForGroup(g.id)),
         modelCount: m.n,
         keyCount: k.n,
       }

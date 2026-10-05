@@ -17,6 +17,8 @@ export type GroupView = {
   protocol: string
   secretSlot: string
   sortOrder: number
+  /** 这条线的 key 填了没 —— 在密钥配置页填,不在本页 */
+  keyFilled: boolean
   modelCount: number
   keyCount: number
 }
@@ -35,7 +37,7 @@ export function GroupForm({ view, isNew = false }: { view?: GroupView; isNew?: b
         <h3 className="font-semibold">{isNew ? '新建分组' : v?.displayName}</h3>
         {!isNew && v && (
           <span className="font-mono text-[12px] text-[var(--muted)]">
-            {v.modelCount} 个模型 · {v.keyCount} 把有效 key
+            {v.keyFilled ? '🟢 key 已填' : '🟡 key 未填'} · {v.modelCount} 个模型 · {v.keyCount} 把用户 key
           </span>
         )}
       </div>
@@ -104,13 +106,35 @@ export function GroupForm({ view, isNew = false }: { view?: GroupView; isNew?: b
         </label>
 
         <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="text-[12px] text-[var(--muted)]">上游 key 槽位(留空自动生成)</span>
+          <span className="text-[12px] text-[var(--muted)]">
+            这条线的 key 存在哪个位置 —— <strong>这里填的是位置名,不是 key 本身</strong>
+          </span>
           <input
             name="secretSlot"
             defaultValue={v?.secretSlot}
-            placeholder="留空 = NEWAPI_SERVICE_KEY_<标识大写>"
+            placeholder="留空自动生成,一般不用改"
             className={`${input} font-mono`}
           />
+          {!isNew && (
+            <span className="text-[12px] text-[var(--muted)]">
+              {v?.keyFilled ? (
+                <>
+                  <span className="text-emerald-600">✅ 这把 key 已经填好了</span> ——{' '}
+                  <a href="/ops-2f8a/credentials" className="underline underline-offset-2">
+                    去密钥配置页改
+                  </a>
+                </>
+              ) : (
+                <>
+                  <span className="text-amber-700">⚠️ 这把 key 还没填</span> —— 真正的 key 要在{' '}
+                  <a href="/ops-2f8a/credentials" className="underline underline-offset-2">
+                    密钥配置页
+                  </a>{' '}
+                  填,不是这里
+                </>
+              )}
+            </span>
+          )}
         </label>
       </div>
 
