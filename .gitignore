@@ -31,3 +31,4 @@ yarn-error.log*
 # 工具自动生成的 agent 配置(每次 next dev 会重建,不入库)
 CLAUDE.md
 AGENTS.md
+.vercel
