@@ -1,6 +1,7 @@
 import { site } from '@/lib/site'
 import { pricingRows, savingsPct, fmtPrice } from '@/lib/pricing/calculate'
 import { getGroups } from '@/lib/pricing/groups'
+import { PaymentNotice } from '@/components/marketing/payment-notice'
 import type { PricingRow } from '@/lib/pricing/calculate'
 
 export const metadata = { title: `Pricing — ${site.name}` }
@@ -171,6 +172,10 @@ export default async function Pricing() {
       <p className="mt-4 text-sm text-[var(--muted)]">
         Working at higher volume? <a href={`mailto:${site.supportEmail}`} className="underline underline-offset-2 hover:text-[var(--fg)]">Get in touch</a> about volume pricing.
       </p>
+
+      <div className="mt-8">
+        <PaymentNotice />
+      </div>
 
       {/* 披露 */}
       <div className="mt-14 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">

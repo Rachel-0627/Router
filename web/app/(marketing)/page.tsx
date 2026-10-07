@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { site } from '@/lib/site'
 import { CodeBlock } from '@/components/marketing/code-block'
 import { StraightAnswers } from '@/components/marketing/straight-answers'
+import { PaymentNotice } from '@/components/marketing/payment-notice'
 import { pricingRows, savingsPct, fmtPrice } from '@/lib/pricing/calculate'
 
 // Sonnet 5 高强度使用 1 小时的 list price 成本。
@@ -71,6 +72,12 @@ export default async function Home() {
           >
             See pricing
           </Link>
+        </div>
+
+        {/* 付款方式要在**点注册之前**就看见 —— 不然用户走完注册、建 key、
+            撞 402 才发现只能用加密货币,前面的投入全白费 */}
+        <div className="mt-5 max-w-2xl">
+          <PaymentNotice compact />
         </div>
       </section>
 
