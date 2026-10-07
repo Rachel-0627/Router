@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
 import { getBalanceMicroUsd } from '@/lib/credits'
+import { LowBalance } from '@/components/dashboard/low-balance'
 import { countActiveKeys, spendSinceMicroUsd } from '@/lib/db/queries/usage'
 import { site } from '@/lib/site'
 
@@ -19,6 +20,10 @@ export default async function Overview() {
   return (
     <>
       <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+
+      <div className="mt-6">
+        <LowBalance balanceMicroUsd={balance} spend7dMicroUsd={spend7d} />
+      </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-[var(--border)] p-5">

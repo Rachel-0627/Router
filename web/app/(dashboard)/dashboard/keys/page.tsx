@@ -4,6 +4,9 @@ import { listKeys } from '@/lib/db/queries/keys'
 import { CreateKey } from '@/components/dashboard/create-key'
 import { deleteKey, toggleKey } from '@/app/actions/keys'
 import { getGroups } from '@/lib/pricing/groups'
+import { getBalanceMicroUsd } from '@/lib/credits'
+import { spendSinceMicroUsd } from '@/lib/db/queries/usage'
+import { LowBalance } from '@/components/dashboard/low-balance'
 import type { ProductGroupId } from '@/lib/pricing/types'
 
 export const metadata = { title: `API keys — ${site.name}` }
@@ -14,7 +17,11 @@ const fmtDate = (d: Date | null) =>
 export default async function Keys() {
   const user = await getCurrentUser()
   if (!user) return null
-  const keys = await listKeys(user.id)
+  const [keys, balance, spend7d] = await Promise.all([
+    listKeys(user.id),
+    getBalanceMicroUsd(user.id),
+    spendSinceMicroUsd(user.id, 7),
+  ])
   const allGroups = await getGroups()
   const groups = allGroups
     .filter((g) => g.status === 'live')
@@ -24,6 +31,11 @@ export default async function Keys() {
   return (
     <>
       <h1 className="text-2xl font-semibold tracking-tight">API keys</h1>
+
+      {/* 建完 key 正要去调 API,这是最该提醒余额的时刻 */}
+      <div className="mt-6">
+        <LowBalance balanceMicroUsd={balance} spend7dMicroUsd={spend7d} />
+      </div>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
         Use a key as <code className="font-mono text-[14px]">ANTHROPIC_AUTH_TOKEN</code> with{' '}
         <code className="font-mono text-[14px]">{site.apiBaseUrl}</code> as the base URL.
