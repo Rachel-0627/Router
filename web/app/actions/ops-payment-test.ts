@@ -39,15 +39,26 @@ export async function testPaymentChannel(): Promise<PayTestState> {
     const s = await get('/status')
     checks.push({ name: '① NOWPayments 服务状态', ok: s.status === 200, detail: s.text })
 
-    // ② key 有没有效 —— 401 就是 key 不对
+    // ② key 有没有效
+    //
+    // ⚠️ 这一项失败**不要提前退出**。NOWPayments 的 IP 白名单只限制
+    //    「提现类」端点,/balance 属于其中,但建收款单未必受限 ——
+    //    真正要紧的是建单能不能跑通。卡在这就返回,会让人误以为整条路不通,
+    //    进而去关掉一个本来该留着的安全设置。
     const b = await get('/balance')
+    const ipBlocked = b.status === 403 && b.text.includes('Invalid IP')
     checks.push({
       name: '② API Key 是否有效',
       ok: b.status === 200,
-      detail: b.status === 401 ? 'HTTP 401 —— key 不对,或填成了 Public key' : `HTTP ${b.status} ${b.text}`,
+      detail:
+        b.status === 401
+          ? 'HTTP 401 —— key 不对,或填成了 Public key'
+          : ipBlocked
+            ? `被 IP 白名单挡住(${b.text.match(/Invalid IP - ([\d.]+)/)?.[1] ?? '未知 IP'})。这只说明「查余额/提现」受限,不代表建单不行 —— 看第 ④ 项`
+            : `HTTP ${b.status} ${b.text}`,
     })
-    if (b.status !== 200) {
-      return { ok: false, message: 'API Key 无效,后面的检查没必要做了。', checks }
+    if (b.status === 401) {
+      return { ok: false, message: 'API Key 无效(401),后面的检查没必要做了。', checks }
     }
 
     // ③ 最低充值额 —— 我们定了 $5,得确认上游支持
@@ -120,12 +131,17 @@ export async function testPaymentChannel(): Promise<PayTestState> {
     })
 
     const allOk = checks.every((c) => c.ok)
-    logger.info('支付通道自检完成', { allOk, invoiceId: id })
+    // 只有第②项因 IP 白名单失败、其余都过 —— 这是**理想状态**,不是故障:
+    // 收款照常工作,而提现仍受 IP 保护,别人偷了 key 也提不走钱。
+    const onlyIpBlocked = !allOk && checks.every((c) => c.ok || c.name.startsWith('②'))
+    logger.info('支付通道自检完成', { allOk, onlyIpBlocked, invoiceId: id })
     return {
-      ok: allOk,
+      ok: allOk || onlyIpBlocked,
       message: allOk
-        ? `全部通过。收款单能建、能回查、验签密钥在位 —— 对接没问题,就差一笔真实付款了。`
-        : '有项目没通过,见下方。',
+        ? '全部通过。收款单能建、能回查、验签密钥在位 —— 对接没问题,就差一笔真实付款了。'
+        : onlyIpBlocked
+          ? '收款链路全通。只有「查余额」被 IP 白名单挡着 —— 这**不用修**:收款不受影响,而提现仍受 IP 保护,别人偷了 key 也提不走钱。建议保持现状。'
+          : '有项目没通过,见下方。',
       checks,
     }
   } catch (e) {
