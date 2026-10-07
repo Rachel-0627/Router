@@ -136,11 +136,10 @@ export const nowpayments: PaymentProvider = {
       order_description: `${env.APP_NAME} credits`,
       success_url: req.successUrl,
       cancel_url: req.cancelUrl,
-      // ⚠️ **不锁汇率**。锁汇率会把上游最低额抬到 18.55 USD,小额单根本付不了。
-      //    关掉它的代价几乎为零:USDT 是稳定币,转账期间漂移可忽略;
-      //    而且入账本来就是「到多少记多少」(见 lib/credits.ts),
-      //    金额对不上本就不会卡住用户。
-      is_fixed_rate: false,
+      // 锁汇率。曾为了压低最低充值额关掉过它,但实测**四种开关组合下的
+      // 下限都是 18.54**,关掉它一分钱也没省下来 —— 那就该用更安全的默认值:
+      // 锁住汇率,用户看到多少就是多少,不会在转账途中漂移。
+      is_fixed_rate: true,
       // 网络手续费由付款方承担 —— 否则我们到账永远少一截
       is_fee_paid_by_user: true,
     }
