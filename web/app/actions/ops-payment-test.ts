@@ -61,20 +61,44 @@ export async function testPaymentChannel(): Promise<PayTestState> {
       return { ok: false, message: 'API Key 无效(401),后面的检查没必要做了。', checks }
     }
 
-    // ③ 最低充值额 —— 我们定了 $5,得确认上游支持
-    const m = await get(`/min-amount?currency_from=usd&currency_to=usdttrc20`)
-    let minOk = m.status === 200
-    let minNote = m.text
-    try {
-      const j = JSON.parse(m.text) as { min_amount?: number }
-      if (typeof j.min_amount === 'number') {
-        minOk = j.min_amount <= site.minTopupUsd
-        minNote = `上游最低 ${j.min_amount} USD · 我们设的最低 ${site.minTopupUsd} USD${minOk ? '' : ' ⚠️ 我们设得太低了,要调高'}`
+    // ③ 最低充值额。
+    //
+    // ⚠️ 这个下限受两个开关影响,不是一个固定数:
+    //      is_fixed_rate      锁汇率,通常会**抬高**最低额
+    //      is_fee_paid_by_user 网络费谁出
+    //    所以要把组合都探一遍,才知道能压到多低、代价是什么。
+    const combos = [
+      { label: '锁汇率+用户付网络费(当前设置)', q: 'is_fixed_rate=true&is_fee_paid_by_user=true' },
+      { label: '锁汇率+我们付网络费', q: 'is_fixed_rate=true&is_fee_paid_by_user=false' },
+      { label: '不锁汇率+用户付网络费', q: 'is_fixed_rate=false&is_fee_paid_by_user=true' },
+      { label: '不锁汇率+我们付网络费', q: 'is_fixed_rate=false&is_fee_paid_by_user=false' },
+    ]
+    const mins: string[] = []
+    let lowest = Number.POSITIVE_INFINITY
+    for (const c of combos) {
+      const r = await get(`/min-amount?currency_from=usd&currency_to=usdttrc20&${c.q}`)
+      let v = '?'
+      try {
+        const j = JSON.parse(r.text) as { min_amount?: number }
+        if (typeof j.min_amount === 'number') {
+          v = `$${j.min_amount.toFixed(2)}`
+          if (j.min_amount < lowest) lowest = j.min_amount
+        } else v = r.text.slice(0, 60)
+      } catch {
+        v = `HTTP ${r.status}`
       }
-    } catch {
-      /* 保持原始返回 */
+      mins.push(`${c.label} → ${v}`)
     }
-    checks.push({ name: '③ 最低充值额是否兼容', ok: minOk, detail: minNote })
+    const minOk = Number.isFinite(lowest) && lowest <= site.minTopupUsd
+    checks.push({
+      name: '③ 最低充值额(各组合实测)',
+      ok: minOk,
+      detail:
+        mins.join('  ◆  ') +
+        `\n\n我们设的最低 $${site.minTopupUsd}` +
+        (Number.isFinite(lowest) ? ` · 上游能压到的最低 $${lowest.toFixed(2)}` : '') +
+        (minOk ? '' : ' ⚠️ 我们设得太低,用户付款时会被拒'),
+    })
 
     // ④ 真实建一张 invoice —— 最关键的一步
     const secret = env.PAYMENT_WEBHOOK_PATH_SECRET
