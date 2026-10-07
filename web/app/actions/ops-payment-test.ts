@@ -112,25 +112,39 @@ export async function testPaymentChannel(): Promise<PayTestState> {
     })
 
     // ⑤ 按 invoice 回查 —— 我们入账前走的就是这条
-    const q = await get(`/payment/?invoiceid=${encodeURIComponent(id)}&limit=5`)
-    let qOk = false
-    let qNote = q.text
-    try {
-      const j = JSON.parse(q.text) as Record<string, unknown>
-      // ⚠️ 把**真实结构**原样打出来。这条是入账前的最后一道校验,
-      //    解析错了会导致该入账的不入账 —— 猜字段名是不行的。
-      const keys = Object.keys(j)
-      const arrKey = keys.find((k) => Array.isArray(j[k]))
-      const arr = arrKey ? (j[arrKey] as unknown[]) : null
-      qOk = Boolean(arrKey)
-      qNote =
-        `HTTP ${q.status} · 顶层字段 [${keys.join(', ')}]` +
-        (arrKey ? ` · 列表在 "${arrKey}",${arr!.length} 条(还没人付款,0 条正常)` : ' · ⚠️ 没找到数组字段') +
-        (arr && arr.length > 0 ? ` · 单条字段 [${Object.keys(arr[0] as object).join(', ')}]` : '')
-    } catch {
-      /* 保持原始返回 */
+    // ⚠️ 列表接口 /v1/payment/ 需要 JWT(账号密码换取),光有 API key 是 401。
+    //    存你的登录密码比存 API key 危险得多,不走那条路。
+    //    所以这里**实测几个候选端点**,找出只用 API key 就能查到订单状态的那个 ——
+    //    这条路径是入账前的最后一道校验,必须有一个可用的,不能靠猜。
+    const candidates = [
+      `/invoice/${encodeURIComponent(id)}`,
+      `/payment/?invoiceId=${encodeURIComponent(id)}`,
+      `/payment/?invoiceid=${encodeURIComponent(id)}`,
+      `/invoice-payment/?iid=${encodeURIComponent(id)}`,
+    ]
+    const probes: string[] = []
+    let found = ''
+    for (const path of candidates) {
+      const r = await get(path)
+      let shape = ''
+      if (r.status === 200) {
+        try {
+          const j = JSON.parse(r.text) as Record<string, unknown>
+          const keys = Object.keys(j)
+          const arrKey = keys.find((k) => Array.isArray(j[k]))
+          shape = ` 字段[${keys.slice(0, 8).join(',')}]${arrKey ? ` 列表在"${arrKey}"` : ''}`
+          if (!found) found = path
+        } catch {
+          shape = ' (非 JSON)'
+        }
+      }
+      probes.push(`${path} → ${r.status}${shape}`)
     }
-    checks.push({ name: '⑤ 按收款单回查(入账前的校验路径)', ok: qOk, detail: qNote })
+    checks.push({
+      name: '⑤ 按收款单回查(入账前的校验路径)',
+      ok: Boolean(found),
+      detail: probes.join('  ◆  ') + (found ? `\n\n✅ 可用端点:${found}` : '\n\n⚠️ 没有一个只用 API key 就能查的端点'),
+    })
 
     checks.push({
       name: '⑥ IPN 验签密钥',
