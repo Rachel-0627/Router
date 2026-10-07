@@ -49,8 +49,15 @@ export interface PaymentProvider {
   /**
    * 回查订单真实状态。
    * ⚠️ 入账前必须调这个,不能直接用 webhook 里的金额和状态。
+   *
+   * @param externalId 我们订单表里存的那个 ID(创建支付时拿到的)
+   * @param handle     可选的回查句柄,来自 parseWebhookVerifyHandle。
+   *                   有些支付商不支持按"创建时的 ID"查状态,只能按
+   *                   "付款发生后才生成的 ID"查 —— NOWPayments 就是这样:
+   *                   按 invoice 查要 JWT(得存账号密码,不可接受),
+   *                   按 payment_id 查只要 API key。
    */
-  verifyPayment(externalId: string): Promise<VerifiedPayment>
+  verifyPayment(externalId: string, handle?: string): Promise<VerifiedPayment>
 
   /**
    * 从 webhook 里**只**提取订单号。
@@ -58,6 +65,15 @@ export interface PaymentProvider {
    * 返回 null 表示这个 webhook 无法识别,应当忽略。
    */
   parseWebhookExternalId(body: unknown, headers: Headers): string | null
+
+  /**
+   * 从 webhook 里取出**回查用的句柄**(如 payment_id)。可选。
+   *
+   * 为什么需要它:订单匹配用的 ID 和回查用的 ID 不一定是同一个。
+   * 没有它的话,要么存支付商的登录密码去换 JWT(危险),
+   * 要么直接信 webhook 里的金额(违反本层的核心原则)。
+   */
+  parseWebhookVerifyHandle?(body: unknown): string | null
 
   /**
    * 验证 webhook 签名。支付商支持签名的**必须**实现。

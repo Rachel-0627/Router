@@ -112,38 +112,28 @@ export async function testPaymentChannel(): Promise<PayTestState> {
     })
 
     // ⑤ 按 invoice 回查 —— 我们入账前走的就是这条
-    // ⚠️ 列表接口 /v1/payment/ 需要 JWT(账号密码换取),光有 API key 是 401。
-    //    存你的登录密码比存 API key 危险得多,不走那条路。
-    //    所以这里**实测几个候选端点**,找出只用 API key 就能查到订单状态的那个 ——
-    //    这条路径是入账前的最后一道校验,必须有一个可用的,不能靠猜。
-    const candidates = [
-      `/invoice/${encodeURIComponent(id)}`,
-      `/payment/?invoiceId=${encodeURIComponent(id)}`,
-      `/payment/?invoiceid=${encodeURIComponent(id)}`,
-      `/invoice-payment/?iid=${encodeURIComponent(id)}`,
-    ]
-    const probes: string[] = []
-    let found = ''
-    for (const path of candidates) {
-      const r = await get(path)
-      let shape = ''
-      if (r.status === 200) {
-        try {
-          const j = JSON.parse(r.text) as Record<string, unknown>
-          const keys = Object.keys(j)
-          const arrKey = keys.find((k) => Array.isArray(j[k]))
-          shape = ` 字段[${keys.slice(0, 8).join(',')}]${arrKey ? ` 列表在"${arrKey}"` : ''}`
-          if (!found) found = path
-        } catch {
-          shape = ' (非 JSON)'
-        }
-      }
-      probes.push(`${path} → ${r.status}${shape}`)
-    }
+    // ⑤ 回查路径。
+    //
+    // ⚠️ 实测按 invoice 查的四个端点全不通(/invoice/{id} 404、
+    //    /payment/?invoiceId= 401 要 JWT、/payment/?invoiceid= 401、
+    //    /invoice-payment/ 404)。列表接口要拿账号密码换 JWT ——
+    //    存登录密码比存 API key 危险得多,不走那条路。
+    //
+    //    实际走 /payment/{payment_id},它只要 API key。payment_id 建单时
+    //    还不存在,从**已验签的回调**里取。
+    //
+    //    这里用一个不存在的 id 探测:返回 **404 而不是 401**,
+    //    就证明 API key 在这个端点上是有效的 —— 这正是我们要确认的事。
+    const probe = await get('/payment/999999999999')
+    const keyWorksHere = probe.status === 404 || probe.status === 200
     checks.push({
-      name: '⑤ 按收款单回查(入账前的校验路径)',
-      ok: Boolean(found),
-      detail: probes.join('  ◆  ') + (found ? `\n\n✅ 可用端点:${found}` : '\n\n⚠️ 没有一个只用 API key 就能查的端点'),
+      name: '⑤ 回查路径 /payment/{payment_id}',
+      ok: keyWorksHere,
+      detail: keyWorksHere
+        ? `HTTP ${probe.status}(用不存在的 id 探测,404 = 端点认我们的 key,路径可用)`
+        : probe.status === 401
+          ? 'HTTP 401 —— 这个端点也不认 API key,回查无路可走'
+          : `HTTP ${probe.status} ${probe.text}`,
     })
 
     checks.push({

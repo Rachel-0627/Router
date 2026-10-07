@@ -72,9 +72,13 @@ export async function POST(
     return NextResponse.json({ ok: false, reason: 'no_order_id' }, { status: 400 })
   }
 
+  // 回查句柄:有些支付商按创建时的 ID 查不到状态,只能按付款后生成的 ID 查。
+  // 它从**已验签**的 body 里取,所以可信。
+  const verifyHandle = provider.parseWebhookVerifyHandle?.(body) ?? undefined
+
   try {
     // 这里面会回查支付商确认真实状态和金额
-    const result = await settlePayment(externalId, providerName)
+    const result = await settlePayment(externalId, providerName, verifyHandle)
     return NextResponse.json({ ok: true, ...result })
   } catch (e) {
     const err = toAppError(e)

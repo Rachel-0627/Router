@@ -25,11 +25,13 @@ export type SettleResult =
 export async function settlePayment(
   externalId: string,
   providerName?: string,
+  /** 回查句柄,见 PaymentProvider.parseWebhookVerifyHandle */
+  verifyHandle?: string,
 ): Promise<SettleResult> {
   const provider = getProvider(providerName)
 
   // ── 防线1:回查支付商,不信 webhook ──
-  const verified = await provider.verifyPayment(externalId)
+  const verified = await provider.verifyPayment(externalId, verifyHandle)
   if (verified.status !== 'paid') {
     logger.info('支付未完成,不入账', { provider: provider.name, externalId, status: verified.status })
     return { applied: false, reason: 'not_paid' }

@@ -134,40 +134,41 @@ export const nowpayments: PaymentProvider = {
     return { externalId: id, paymentUrl: url }
   },
 
-  async verifyPayment(externalId: string): Promise<VerifiedPayment> {
-    const out = rec(await call(`/payment/?invoiceid=${encodeURIComponent(externalId)}&limit=20`))
-    const list = Array.isArray(out?.data) ? (out.data as unknown[]) : []
-    if (list.length === 0) {
-      // 还没人付款就查不到 payment,这是正常状态不是错误
+  /**
+   * 回查真实状态。
+   *
+   * ⚠️ **只能按 payment_id 查**。实测四个按 invoice 查的端点全不通:
+   *      /invoice/{id}               404
+   *      /payment/?invoiceId={id}    401(要 JWT)
+   *      /payment/?invoiceid={id}    401(要 JWT)
+   *      /invoice-payment/?iid={id}  404
+   *    列表接口要拿账号密码换 JWT —— 存你的登录密码比存 API key 危险得多,
+   *    不走那条路。而 /payment/{payment_id} 只要 API key。
+   *
+   *    payment_id 建单时还不存在(用户选完币种才生成),所以它从**已验签的
+   *    回调**里取,经 settlePayment 的 handle 参数传进来。
+   */
+  async verifyPayment(externalId: string, handle?: string): Promise<VerifiedPayment> {
+    if (!handle) {
+      // 还没收到回调就没有 payment_id —— 这是正常状态,不是错误
       return { externalId, status: 'pending', amountCents: 0, currency: 'USD' }
     }
 
-    // 同一张 invoice 可能有多条 payment(用户重试过)。取最"成功"的那条:
-    // 已付 > 进行中 > 失败,同级取最新。
-    const rank = (s: string) => (STATUS_MAP[s] === 'paid' ? 2 : STATUS_MAP[s] === 'pending' ? 1 : 0)
-    const best = list
-      .map((x) => rec(x))
-      .filter((x): x is AnyRec => Boolean(x))
-      .sort((a, b) => {
-        const d = rank(str(b.payment_status) ?? '') - rank(str(a.payment_status) ?? '')
-        if (d !== 0) return d
-        return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
-      })[0]
-
-    const raw = str(best?.payment_status) ?? ''
+    const out = rec(await call(`/payment/${encodeURIComponent(handle)}`))
+    const raw = str(out?.payment_status) ?? ''
     const status = STATUS_MAP[raw] ?? 'pending'
 
     // 金额口径:以**实际折算成美元的到账额**为准。
-    // outcome_amount 是扣掉网络费后真正到我们手里的;没有就退回 price_amount。
-    const paidUsd = num(best?.actually_paid_at_fiat) ?? num(best?.price_amount) ?? 0
-    const amountCents = Math.round(paidUsd * 100)
+    // 少付时(交易所扣了提币手续费)actually_paid_at_fiat 会小于 price_amount,
+    // 上层按实付入账,不卡住用户。
+    const paidUsd = num(out?.actually_paid_at_fiat) ?? num(out?.price_amount) ?? 0
 
     return {
       externalId,
       status,
-      amountCents,
+      amountCents: Math.round(paidUsd * 100),
       currency: 'USD',
-      orderId: str(best?.order_id),
+      orderId: str(out?.order_id),
       paidAt: status === 'paid' ? new Date() : undefined,
     }
   },
@@ -176,6 +177,11 @@ export const nowpayments: PaymentProvider = {
     // 只取 invoice_id —— 它和我们订单表里的 externalId 对应。
     // 其他字段(金额、状态)一律丢弃,以回查为准。
     return str(rec(body)?.invoice_id) ?? null
+  },
+
+  /** 回查要用的 payment_id。它建单时不存在,只能从回调里拿。 */
+  parseWebhookVerifyHandle(body: unknown): string | null {
+    return str(rec(body)?.payment_id) ?? null
   },
 
   verifyWebhookSignature(rawBody: string, headers: Headers): boolean {
