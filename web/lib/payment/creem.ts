@@ -16,6 +16,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { env } from '../env'
+import { getSecret } from '../secrets/store'
 import {
   PaymentProviderError,
   type CheckoutRequest,
@@ -58,13 +59,19 @@ function productMap(): Record<string, string> {
   }
 }
 
-function requireKey(): string {
-  if (!env.CREEM_API_KEY) throw new PaymentProviderError('creem', 'CREEM_API_KEY 未配置')
-  return env.CREEM_API_KEY
+/**
+ * ⚠️ 走 getSecret 而不是直接读 env —— key 是在后台密钥页填的、加密存在库里。
+ *    直接读 env 会出现"自检通过但真实支付报 unavailable"这种最难查的不一致
+ *    (NOWPayments 那边就踩过)。getSecret 自带环境变量兜底,两种配法都支持。
+ */
+async function requireKey(): Promise<string> {
+  const k = await getSecret('CREEM_API_KEY')
+  if (!k) throw new PaymentProviderError('creem', 'CREEM_API_KEY 未配置')
+  return k
 }
 
 async function call(path: string, init?: RequestInit): Promise<unknown> {
-  const key = requireKey()
+  const key = await requireKey()
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
@@ -166,8 +173,8 @@ export const creem: PaymentProvider = {
    * creem-signature 头 = HMAC-SHA256(原始body, webhook密钥) 的十六进制。
    * 用定长比较,避免逐字节比较泄露信息。
    */
-  verifyWebhookSignature(rawBody: string, headers: Headers): boolean {
-    const secret = env.CREEM_WEBHOOK_SECRET
+  async verifyWebhookSignature(rawBody: string, headers: Headers): Promise<boolean> {
+    const secret = await getSecret('CREEM_WEBHOOK_SECRET')
     const got = headers.get('creem-signature')
     if (!secret || !got) return false
     try {

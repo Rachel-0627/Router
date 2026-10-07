@@ -52,7 +52,7 @@ export async function POST(
 
   // 第二道门:签名验证(支付商支持的话)
   if (provider.verifyWebhookSignature) {
-    if (!provider.verifyWebhookSignature(rawBody, req.headers)) {
+    if (!(await provider.verifyWebhookSignature(rawBody, req.headers))) {
       logger.warn('webhook 签名验证失败,已拒绝', { provider: providerName })
       return NextResponse.json({ ok: false, reason: 'bad_signature' }, { status: 401 })
     }

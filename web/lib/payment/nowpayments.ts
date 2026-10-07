@@ -26,6 +26,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { env } from '../env'
+import { getSecret } from '../secrets/store'
 import {
   PaymentProviderError,
   type CheckoutRequest,
@@ -67,18 +68,28 @@ const num = (v: unknown): number | undefined => {
   return Number.isFinite(n) ? n : undefined
 }
 
-function apiKey(): string {
-  const k = env.NOWPAYMENTS_API_KEY
+/**
+ * 取 API key。
+ *
+ * ⚠️ 必须走 getSecret,不能直接读 env ——
+ *    key 是在后台密钥页填的、加密存在库里,环境变量那份是空的。
+ *    读错地方会出现"自检通过但真实充值报 Payments unavailable"
+ *    这种最难查的不一致。getSecret 自带"库里没有就读环境变量"的兜底,
+ *    两种配置方式都能用。
+ */
+async function apiKey(): Promise<string> {
+  const k = await getSecret('NOWPAYMENTS_API_KEY')
   if (!k) throw new PaymentProviderError('nowpayments', '未配置 NOWPAYMENTS_API_KEY')
   return k
 }
 
 async function call(path: string, init?: RequestInit): Promise<unknown> {
+  const key = await apiKey()
   let res: Response
   try {
     res = await fetch(`${BASE_URL}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey(), ...(init?.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, ...(init?.headers ?? {}) },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
   } catch (e) {
@@ -184,8 +195,9 @@ export const nowpayments: PaymentProvider = {
     return str(rec(body)?.payment_id) ?? null
   },
 
-  verifyWebhookSignature(rawBody: string, headers: Headers): boolean {
-    const secret = env.NOWPAYMENTS_IPN_SECRET
+  async verifyWebhookSignature(rawBody: string, headers: Headers): Promise<boolean> {
+    // 同样走 getSecret —— IPN 密钥也是在后台填的
+    const secret = await getSecret('NOWPAYMENTS_IPN_SECRET')
     const got = headers.get('x-nowpayments-sig')
     if (!secret || !got) return false
 

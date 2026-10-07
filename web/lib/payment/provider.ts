@@ -84,7 +84,9 @@ export interface PaymentProvider {
    * 不实现(返回 undefined)表示该支付商不提供签名,
    * 此时只能靠回调地址里的路径密钥 + 回查校验兜底。
    */
-  verifyWebhookSignature?(rawBody: string, headers: Headers): boolean
+  //
+  // ⚠️ 允许返回 Promise:密钥存在加密库里,读它是异步的。
+  verifyWebhookSignature?(rawBody: string, headers: Headers): boolean | Promise<boolean>
 }
 
 /** 支付商返回的数据不可信,统一用这个函数收敛异常 */
