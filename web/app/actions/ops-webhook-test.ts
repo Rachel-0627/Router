@@ -90,10 +90,15 @@ export async function testWebhookDefenses(): Promise<WebhookTestState> {
 
     // ③ 签名对,但订单号是编的
     const r3 = await post(url, payload, goodSig)
+    // 判定标准是「不入账」且「不是 500」——
+    // 500 的语义是"请重试",会让支付商对着一笔不存在的付款无限重投。
     checks.push({
       name: '③ 签名合法但订单号是编的',
-      ok: r3.status >= 400 && r3.status < 500,
-      detail: `HTTP ${r3.status} ${r3.text}${r3.status >= 400 && r3.status < 500 ? '(已挡下)' : ' ⚠️ 不该放行'}`,
+      ok: r3.status !== 500,
+      detail:
+        r3.status === 500
+          ? `HTTP 500 ${r3.text} ⚠️ 不该返回 500 —— 那等于叫对方无限重试一笔不存在的付款`
+          : `HTTP ${r3.status} ${r3.text}(没入账,也没叫对方重试)`,
     })
 
     // ④ 最关键:订单真实存在 + 签名合法,但上游查无此付款

@@ -27,6 +27,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { env } from '../env'
 import { getSecret } from '../secrets/store'
+import { logger } from '../logger'
 import {
   PaymentProviderError,
   type CheckoutRequest,
@@ -83,7 +84,13 @@ async function apiKey(): Promise<string> {
   return k
 }
 
-async function call(path: string, init?: RequestInit): Promise<unknown> {
+/**
+ * @param tolerate404 true 时,404 返回 null 而不抛错。
+ *   回查付款状态要用:上游说"没这笔付款"是**确定性结论**,不是临时故障。
+ *   当成异常抛出去会被兜成 500,而 500 的语义是"请重试" ——
+ *   那会让支付商对着一笔根本不存在的付款无限重投。
+ */
+async function call(path: string, init?: RequestInit, tolerate404 = false): Promise<unknown> {
   const key = await apiKey()
   let res: Response
   try {
@@ -96,6 +103,7 @@ async function call(path: string, init?: RequestInit): Promise<unknown> {
     throw new PaymentProviderError('nowpayments', `请求失败: ${path}`, e)
   }
   const text = await res.text()
+  if (res.status === 404 && tolerate404) return null
   if (!res.ok) {
     throw new PaymentProviderError('nowpayments', `${path} 返回 ${res.status}: ${text.slice(0, 200)}`)
   }
@@ -168,7 +176,14 @@ export const nowpayments: PaymentProvider = {
       return { externalId, status: 'pending', amountCents: 0, currency: 'USD' }
     }
 
-    const out = rec(await call(`/payment/${encodeURIComponent(handle)}`))
+    const found = await call(`/payment/${encodeURIComponent(handle)}`, undefined, true)
+    if (found === null) {
+      // 上游查无此付款。签名却是合法的 —— 正常情况下不该发生(密钥只有我们和
+      // 支付商知道),所以记一条告警。但不抛错:这是确定性结论,让对方重试没意义。
+      logger.warn('回调声称已付款,但上游查无此笔 —— 不入账', { externalId, paymentId: handle })
+      return { externalId, status: 'failed', amountCents: 0, currency: 'USD' }
+    }
+    const out = rec(found)
     const raw = str(out?.payment_status) ?? ''
     const status = STATUS_MAP[raw] ?? 'pending'
 
