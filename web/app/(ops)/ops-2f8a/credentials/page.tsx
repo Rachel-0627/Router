@@ -11,6 +11,7 @@ import { UpstreamModels } from '@/components/ops/upstream-models'
 import { InjectionTest } from '@/components/ops/injection-test'
 import { KekPanel } from '@/components/ops/kek-panel'
 import { PaymentTest } from '@/components/ops/payment-test'
+import { WebhookTest } from '@/components/ops/webhook-test'
 
 export const metadata = { title: 'ops · credentials', robots: { index: false, follow: false } }
 export const dynamic = 'force-dynamic'
@@ -161,6 +162,7 @@ export default async function OpsCredentials() {
           <SecretForm key={v.slot} view={v} />
         ))}
         <PaymentTest />
+        <WebhookTest />
       </div>
 
       <div className="mt-10 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
