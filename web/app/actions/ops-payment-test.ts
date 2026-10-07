@@ -113,12 +113,20 @@ export async function testPaymentChannel(): Promise<PayTestState> {
 
     // ⑤ 按 invoice 回查 —— 我们入账前走的就是这条
     const q = await get(`/payment/?invoiceid=${encodeURIComponent(id)}&limit=5`)
-    let qOk = q.status === 200
+    let qOk = false
     let qNote = q.text
     try {
-      const j = JSON.parse(q.text) as { data?: unknown[] }
-      qNote = `HTTP 200 · data ${Array.isArray(j.data) ? j.data.length : '?'} 条(还没人付款,0 条是正常的)`
-      qOk = Array.isArray(j.data)
+      const j = JSON.parse(q.text) as Record<string, unknown>
+      // ⚠️ 把**真实结构**原样打出来。这条是入账前的最后一道校验,
+      //    解析错了会导致该入账的不入账 —— 猜字段名是不行的。
+      const keys = Object.keys(j)
+      const arrKey = keys.find((k) => Array.isArray(j[k]))
+      const arr = arrKey ? (j[arrKey] as unknown[]) : null
+      qOk = Boolean(arrKey)
+      qNote =
+        `HTTP ${q.status} · 顶层字段 [${keys.join(', ')}]` +
+        (arrKey ? ` · 列表在 "${arrKey}",${arr!.length} 条(还没人付款,0 条正常)` : ' · ⚠️ 没找到数组字段') +
+        (arr && arr.length > 0 ? ` · 单条字段 [${Object.keys(arr[0] as object).join(', ')}]` : '')
     } catch {
       /* 保持原始返回 */
     }
