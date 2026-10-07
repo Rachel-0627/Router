@@ -3,13 +3,13 @@
  * 换支付商只改环境变量 PAYMENT_PROVIDER,业务代码不动。
  */
 import { env } from '../env'
-import { nexapay } from './nexapay'
+import { nowpayments } from './nowpayments'
 import { creem } from './creem'
 import type { PaymentProvider } from './provider'
 
 const PROVIDERS: Record<string, PaymentProvider> = {
+  nowpayments,
   creem,
-  nexapay,
   // paddle 待接入时在这里注册
 }
 

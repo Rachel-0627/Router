@@ -24,6 +24,35 @@ export default function Refund() {
         <li>Refunds are issued in the original currency of the purchase.</li>
       </ul>
 
+      <h2>Crypto payments: how refunds differ</h2>
+      <p>
+        Blockchain transfers cannot be reversed. We honour the same 30-day refund promise for
+        credits bought with crypto, but the mechanics are different and you should know them
+        before you pay:
+      </p>
+      <ul>
+        <li>
+          Refunds are sent manually, <strong>on the same network and in the same coin</strong> you
+          paid with. Tell us the receiving address when you request one — we cannot reverse the
+          original transaction.
+        </li>
+        <li>
+          The <strong>network fee for the refund transfer is deducted</strong> from the amount
+          returned. On the networks we support this is typically well under a dollar.
+        </li>
+        <li>
+          We refund the <strong>US dollar value credited to your account</strong>, paid out in
+          stablecoin. We do not take on exchange-rate risk in either direction.
+        </li>
+        <li>Manual refunds are processed within 5 business days.</li>
+      </ul>
+      <p>
+        <strong>We credit whatever actually arrives.</strong> Exchanges deduct a withdrawal fee,
+        so sending a $20 invoice often lands as slightly less. Your balance reflects the amount
+        received, not the amount invoiced — your payment is never rejected for being a little
+        short.
+      </p>
+
       <h2>Worked examples</h2>
       <ul>
         <li>You top up ${'$'}50 and use nothing → refund ${'$'}50.</li>

@@ -134,7 +134,10 @@ ai-gateway/
 │   │   ├── alert.ts               告警(Telegram,自动脱敏密钥)  ✅
 │   │   ├── payment/               支付通道(可插拔)
 │   │   │   ├── provider.ts            抽象接口 ⭐                ✅
-│   │   │   ├── nexapay.ts             NexaPay 实现              ✅
+│   │   │   ├── nowpayments.ts         加密货币收款(主力通道)    ✅
+│   │   │   │                          ⚠️ 验签和别家相反:签的是
+│   │   │   │                             **按 key 排序后重序列化**的 JSON,
+│   │   │   │                             不是原始字节。照搬习惯写法永远验不过
 │   │   │   └── index.ts               通道选择                  ✅
 │   │   ├── credits.ts             ⭐ 幂等入账(三道防线)        ✅
 │   │   ├── db/
@@ -245,7 +248,7 @@ ai-gateway/
 - [x] **阶段0 地基** · **阶段1 落地页+法务页**(已部署 globalrouterai.com)
 - [x] **阶段2 网关** — 代理层/流式 SSE/故障降级 503。**渠道配置待 VPS**
 - [x] **阶段3 认证 + Key 管理** — scrypt/jose 会话/自签发 key
-- [x] **阶段4 支付** — 幂等入账/充值页/交易记录。**待 NexaPay 文档**
+- [x] **阶段4 支付** — NOWPayments 加密货币通道。**待填 API Key + IPN 密钥**
 - [x] **阶段5 用量看板 + 运营后台** `/ops-2f8a`
 - [x] **阶段6 Status 页 + 渠道探测 + 余额监控**
 
@@ -276,7 +279,9 @@ ai-gateway/
 2. **开 Supabase/Neon**,把 `DATABASE_URL` 换掉
 3. **new-api 后台确认合规条款** —— 不做的话用户付了钱加不上额度
 4. **建服务令牌**填进 `NEWAPI_SERVICE_KEY`(接口拿不到明文,只能手工复制)
-5. **拿 NexaPay 文档**,核对 `nexapay.ts` 的 ENDPOINTS / FIELDS
+5. **填 NOWPayments 的两个密钥**(后台密钥页),然后跑一笔真实充值
+   ⚠️ nexapay 已下线:实测是 $79/月订阅制入金聚合器,不是按笔收费的网关,
+      且其通道(Transak/Banxa/Ramp)要求**终端用户做 KYC**
 6. **部署修复后的 sonnet-5 价格** —— 线上仍在展示作废的 $3/$15
 7. 配 `TELEGRAM_BOT_TOKEN` / `CHAT_ID`,否则告警只进日志
 

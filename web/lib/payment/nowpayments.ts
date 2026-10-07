@@ -1,0 +1,200 @@
+/**
+ * NOWPayments 适配器(加密货币收款)。
+ *
+ * 接口取自官方文档与 Postman 集合(2026-10-07 核对):
+ *   创建   POST {base}/v1/invoice
+ *          body {price_amount, price_currency:'usd', order_id, order_description,
+ *                ipn_callback_url, success_url, cancel_url, pay_currency, is_fixed_rate}
+ *          返回 {id, invoice_url}
+ *   回查   GET  {base}/v1/payment/?invoiceid=<invoice id>
+ *   鉴权   x-api-key 请求头
+ *   验签   x-nowpayments-sig = HMAC-SHA512(按 key 排序后的 JSON, IPN 密钥).hex
+ *
+ * ⚠️ **验签方式和别家不一样,这是最容易写错的地方。**
+ *    Creem 之类是对**原始字节**算 HMAC,所以绝不能先 parse 再 stringify。
+ *    NOWPayments 相反:它签的是**按 key 排序后重新序列化**的 JSON。
+ *    照搬"用原始 body"的习惯写法,签名永远对不上。
+ *
+ * ⚠️ 为什么选 invoice 而不是 payment:
+ *    invoice 的 id 在**创建时**就有,能直接存进订单表当 externalId;
+ *    payment_id 要等用户选完币种才生成,创建时拿不到,订单就匹配不上了。
+ *
+ * ⚠️ 加密货币的两个现实:
+ *    1. 用户从交易所提币会被扣手续费,想转 $20 实际到账可能只有 $18.9 ——
+ *       状态会是 partially_paid。我们按**实际到账**入账,不卡住用户。
+ *    2. 链上转账不可逆,所以退款只能人工按原链原币种退(见 /legal/refund)。
+ */
+import { createHmac, timingSafeEqual } from 'node:crypto'
+import { env } from '../env'
+import {
+  PaymentProviderError,
+  type CheckoutRequest,
+  type CheckoutSession,
+  type PaymentProvider,
+  type PaymentStatus,
+  type VerifiedPayment,
+} from './provider'
+
+const BASE_URL = 'https://api.nowpayments.io/v1'
+const TIMEOUT_MS = 20_000
+
+/**
+ * 接受的币种。**只收稳定币** —— 开放收 BTC/ETH 的话,用户付款到我们到账
+ * 之间价格会变,多收少收都成扯皮点。稳定币没这个问题。
+ * 留空则由 NOWPayments 展示全部币种。
+ */
+const PAY_CURRENCY = 'usdttrc20'
+
+/** NOWPayments 支付状态 → 我们的状态 */
+const STATUS_MAP: Record<string, PaymentStatus> = {
+  waiting: 'pending',      // 等用户转账
+  confirming: 'pending',   // 链上确认中
+  confirmed: 'pending',    // 链上已确认,平台还没结算完
+  sending: 'pending',      // 正在打给我们
+  finished: 'paid',        // 全额到账
+  partially_paid: 'paid',  // 少付了 —— 仍按实际到账入账,不让用户钱卡住
+  failed: 'failed',
+  refunded: 'refunded',
+  expired: 'expired',
+}
+
+type AnyRec = Record<string, unknown>
+const rec = (v: unknown): AnyRec | undefined => (v && typeof v === 'object' ? (v as AnyRec) : undefined)
+const str = (v: unknown): string | undefined =>
+  typeof v === 'string' ? v : typeof v === 'number' ? String(v) : undefined
+const num = (v: unknown): number | undefined => {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+  return Number.isFinite(n) ? n : undefined
+}
+
+function apiKey(): string {
+  const k = env.NOWPAYMENTS_API_KEY
+  if (!k) throw new PaymentProviderError('nowpayments', '未配置 NOWPAYMENTS_API_KEY')
+  return k
+}
+
+async function call(path: string, init?: RequestInit): Promise<unknown> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey(), ...(init?.headers ?? {}) },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (e) {
+    throw new PaymentProviderError('nowpayments', `请求失败: ${path}`, e)
+  }
+  const text = await res.text()
+  if (!res.ok) {
+    throw new PaymentProviderError('nowpayments', `${path} 返回 ${res.status}: ${text.slice(0, 200)}`)
+  }
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    throw new PaymentProviderError('nowpayments', `${path} 返回的不是 JSON`, e)
+  }
+}
+
+/**
+ * 按 NOWPayments 的规则序列化:**按 key 排序后的 JSON**。
+ * 这里刻意照抄官方示例 `JSON.stringify(params, Object.keys(params).sort())` ——
+ * 自己另写一套"更合理"的排序,签名就对不上了。要的是和对方逐字节一致,不是优雅。
+ */
+function sortedJson(obj: AnyRec): string {
+  return JSON.stringify(obj, Object.keys(obj).sort())
+}
+
+export const nowpayments: PaymentProvider = {
+  name: 'nowpayments',
+
+  async createCheckout(req: CheckoutRequest): Promise<CheckoutSession> {
+    const base = env.APP_URL.replace(/\/$/, '')
+    const secret = env.PAYMENT_WEBHOOK_PATH_SECRET
+    const body: AnyRec = {
+      price_amount: (req.amountCents / 100).toFixed(2),
+      price_currency: 'usd',
+      order_id: req.orderId,
+      order_description: `${env.APP_NAME} credits`,
+      success_url: req.successUrl,
+      cancel_url: req.cancelUrl,
+      // 锁汇率:避免用户转账期间币价波动导致金额对不上
+      is_fixed_rate: true,
+      // 网络手续费由付款方承担 —— 否则我们到账永远少一截
+      is_fee_paid_by_user: true,
+    }
+    if (PAY_CURRENCY) body.pay_currency = PAY_CURRENCY
+    if (secret) body.ipn_callback_url = `${base}/api/webhook/nowpayments/${secret}`
+
+    const out = rec(await call('/invoice', { method: 'POST', body: JSON.stringify(body) }))
+    const id = str(out?.id)
+    const url = str(out?.invoice_url)
+    if (!id || !url) {
+      throw new PaymentProviderError('nowpayments', `创建 invoice 返回缺字段: ${JSON.stringify(out).slice(0, 200)}`)
+    }
+    return { externalId: id, paymentUrl: url }
+  },
+
+  async verifyPayment(externalId: string): Promise<VerifiedPayment> {
+    const out = rec(await call(`/payment/?invoiceid=${encodeURIComponent(externalId)}&limit=20`))
+    const list = Array.isArray(out?.data) ? (out.data as unknown[]) : []
+    if (list.length === 0) {
+      // 还没人付款就查不到 payment,这是正常状态不是错误
+      return { externalId, status: 'pending', amountCents: 0, currency: 'USD' }
+    }
+
+    // 同一张 invoice 可能有多条 payment(用户重试过)。取最"成功"的那条:
+    // 已付 > 进行中 > 失败,同级取最新。
+    const rank = (s: string) => (STATUS_MAP[s] === 'paid' ? 2 : STATUS_MAP[s] === 'pending' ? 1 : 0)
+    const best = list
+      .map((x) => rec(x))
+      .filter((x): x is AnyRec => Boolean(x))
+      .sort((a, b) => {
+        const d = rank(str(b.payment_status) ?? '') - rank(str(a.payment_status) ?? '')
+        if (d !== 0) return d
+        return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
+      })[0]
+
+    const raw = str(best?.payment_status) ?? ''
+    const status = STATUS_MAP[raw] ?? 'pending'
+
+    // 金额口径:以**实际折算成美元的到账额**为准。
+    // outcome_amount 是扣掉网络费后真正到我们手里的;没有就退回 price_amount。
+    const paidUsd = num(best?.actually_paid_at_fiat) ?? num(best?.price_amount) ?? 0
+    const amountCents = Math.round(paidUsd * 100)
+
+    return {
+      externalId,
+      status,
+      amountCents,
+      currency: 'USD',
+      orderId: str(best?.order_id),
+      paidAt: status === 'paid' ? new Date() : undefined,
+    }
+  },
+
+  parseWebhookExternalId(body: unknown): string | null {
+    // 只取 invoice_id —— 它和我们订单表里的 externalId 对应。
+    // 其他字段(金额、状态)一律丢弃,以回查为准。
+    return str(rec(body)?.invoice_id) ?? null
+  },
+
+  verifyWebhookSignature(rawBody: string, headers: Headers): boolean {
+    const secret = env.NOWPAYMENTS_IPN_SECRET
+    const got = headers.get('x-nowpayments-sig')
+    if (!secret || !got) return false
+
+    let parsed: AnyRec
+    try {
+      parsed = JSON.parse(rawBody) as AnyRec
+    } catch {
+      return false
+    }
+    if (!parsed || typeof parsed !== 'object') return false
+
+    const expected = createHmac('sha512', secret).update(sortedJson(parsed), 'utf8').digest('hex')
+    const a = Buffer.from(expected, 'hex')
+    const b = Buffer.from(got.trim(), 'hex')
+    // 长度不等时 timingSafeEqual 会抛错,先挡住
+    return a.length === b.length && a.length > 0 && timingSafeEqual(a, b)
+  },
+}

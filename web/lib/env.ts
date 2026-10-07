@@ -61,8 +61,13 @@ const schema = z.object({
 
   // ---- 阶段4 支付(现在可空) ----
   /** 主力通道 */
-  PAYMENT_PROVIDER: z.enum(['nexapay', 'creem', 'paddle']).default('nexapay'),
-  NEXAPAY_API_KEY: z.string().optional(),
+  // nexapay 已下线:实测它是 $79/月的订阅制入金聚合器,不是按笔收费的网关,
+  // 且其通道(Transak/Banxa/Ramp)要求**终端用户做 KYC**。两个坑都占,不用。
+  PAYMENT_PROVIDER: z.enum(['nowpayments', 'creem', 'paddle']).default('nowpayments'),
+  /** 加密货币收款。按笔 1%,无月费,无需公司主体 —— 个人身份唯一走得通的通道 */
+  NOWPAYMENTS_API_KEY: z.string().optional(),
+  /** IPN 回调验签密钥。⚠️ 和 API Key 是两个不同的值,别填反 */
+  NOWPAYMENTS_IPN_SECRET: z.string().optional(),
   /** webhook 路径里的随机段,防止回调地址被猜到 */
   PAYMENT_WEBHOOK_PATH_SECRET: z.string().optional(),
   CREEM_API_KEY: z.string().optional(),
@@ -98,7 +103,7 @@ export const featureReady = {
     Boolean(env.NEWAPI_BASE_URL && (env.NEWAPI_ADMIN_TOKEN || (env.NEWAPI_ADMIN_USER && env.NEWAPI_ADMIN_PASSWORD))),
   auth: () => Boolean(env.AUTH_SECRET),
   ops: () => Boolean(env.OPS_ACCESS_KEY && env.AUTH_SECRET),
-  nexapay: () => Boolean(env.NEXAPAY_API_KEY),
+  nowpayments: () => Boolean(env.NOWPAYMENTS_API_KEY && env.NOWPAYMENTS_IPN_SECRET),
   creem: () => Boolean(env.CREEM_API_KEY && env.CREEM_WEBHOOK_SECRET),
   paddle: () => Boolean(env.PADDLE_API_KEY && env.PADDLE_WEBHOOK_SECRET),
   alert: () => Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),

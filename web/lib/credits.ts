@@ -59,14 +59,38 @@ export async function settlePayment(
       throw conflict('This order has already been refunded.', { orderId: order.id })
     }
 
-    // ── 金额核对:支付商确认的实付必须等于订单金额 ──
-    if (verified.amountCents !== order.amountCents) {
-      logger.error('回查金额与订单不符,拒绝入账', {
+    // ── 金额核对 ──
+    //
+    // ⚠️ 不能要求"实付必须等于订单金额"。加密货币充值里**少付是常态**:
+    //    用户从交易所提币,平台会扣一笔提币手续费,想转 $20 实际到账可能
+    //    只有 $18.9。按严格相等判,这笔钱就卡住了 —— 用户付了钱拿不到额度,
+    //    而链上转账不可逆,他连退都退不回去。这是加密货币充值最大的客诉来源。
+    //
+    //    所以改成**到多少记多少**。我们不做任何赠送,额度和美元是 1:1,
+    //    按实付入账天然正确,多付少付都不用特殊处理。
+    //
+    //    只保留一道防呆:实付远超订单(可能是我们自己算错或对方返回异常)时拒绝,
+    //    宁可人工核对也不要凭一个可疑数字凭空发额度。
+    if (verified.amountCents <= 0) {
+      logger.error('回查金额为 0 或负数,拒绝入账', { orderId: order.id, verifiedCents: verified.amountCents })
+      throw badRequest(undefined, { reason: 'amount_invalid', orderId: order.id })
+    }
+    if (verified.amountCents > order.amountCents * 2) {
+      logger.error('回查金额远超订单,拒绝入账待人工核对', {
         orderId: order.id,
         expectedCents: order.amountCents,
         verifiedCents: verified.amountCents,
       })
-      throw badRequest(undefined, { reason: 'amount_mismatch', orderId: order.id })
+      throw badRequest(undefined, { reason: 'amount_too_large', orderId: order.id })
+    }
+    // 实际入账额度 = 实付金额(美分 → micro USD)
+    const creditsMicroUsd = verified.amountCents * 10_000
+    if (verified.amountCents !== order.amountCents) {
+      logger.warn('实付与订单金额不一致,按实付入账', {
+        orderId: order.id,
+        orderCents: order.amountCents,
+        paidCents: verified.amountCents,
+      })
     }
 
     await tx
@@ -76,19 +100,15 @@ export async function settlePayment(
 
     await tx.insert(creditLedger).values({
       userId: order.userId,
-      deltaMicroUsd: order.creditsMicroUsd,
+      deltaMicroUsd: creditsMicroUsd,
       type: 'topup',
       refType: 'order',
       refId: order.id,
       note: `${provider.name} ${externalId}`,
     })
 
-    logger.info('入账成功', {
-      orderId: order.id,
-      userId: order.userId,
-      creditsMicroUsd: order.creditsMicroUsd,
-    })
-    return { applied: true, userId: order.userId, creditsMicroUsd: order.creditsMicroUsd }
+    logger.info('入账成功', { orderId: order.id, userId: order.userId, creditsMicroUsd })
+    return { applied: true, userId: order.userId, creditsMicroUsd }
   })
 }
 

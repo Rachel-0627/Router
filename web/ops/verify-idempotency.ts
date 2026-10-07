@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '../lib/db'
 import { users, orders, creditLedger, apiKeys, usageDaily } from '../lib/db/schema'
 import { settlePayment, getBalanceMicroUsd } from '../lib/credits'
-import { nexapay } from '../lib/payment/nexapay'
+import { nowpayments } from '../lib/payment/nowpayments'
 import { env } from '../lib/env'
 
 const CONCURRENT_CALLBACKS = 5
@@ -51,7 +51,7 @@ async function main() {
 
   // 打桩:冒充支付商回查。不碰生产代码,只在本进程内替换方法。
   const externalId = `chg_verify_${Date.now()}`
-  nexapay.verifyPayment = async () => ({
+  nowpayments.verifyPayment = async () => ({
     externalId,
     status: 'paid' as const,
     amountCents: ORDER_CENTS,
@@ -63,7 +63,7 @@ async function main() {
   console.log(`建了临时测试账号 ${u.email}`)
   await db.insert(orders).values({
     userId: u.id,
-    provider: 'nexapay',
+    provider: 'nowpayments',
     externalId,
     amountCents: ORDER_CENTS,
     creditsMicroUsd: ORDER_CREDITS,
@@ -74,7 +74,7 @@ async function main() {
 
   console.log(`并发打 ${CONCURRENT_CALLBACKS} 次同一个回调(模拟支付商重试风暴)…`)
   const results = await Promise.allSettled(
-    Array.from({ length: CONCURRENT_CALLBACKS }, () => settlePayment(externalId, 'nexapay')),
+    Array.from({ length: CONCURRENT_CALLBACKS }, () => settlePayment(externalId, 'nowpayments')),
   )
   const applied = results.filter((r) => r.status === 'fulfilled' && r.value.applied).length
   const skipped = results.filter((r) => r.status === 'fulfilled' && !r.value.applied).length

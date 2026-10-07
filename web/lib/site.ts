@@ -41,10 +41,23 @@ export const site = {
     'model describes itself — can differ from a first-party API. The service is built ' +
     'and tuned for coding agent workloads; evaluate it for your use case before relying on it.',
 
+  /**
+   * 充值档位。默认选中 $50 ——
+   * 加密货币**做不到自动续费**(没法从用户钱包拉钱),每次付款都有摩擦,
+   * 所以要让用户少付几次、一次充够,而不是频繁小额。
+   */
   topupTiers: [
-    { amount: 20, label: '$20' },
+    { amount: 5, label: '$5' },
     { amount: 50, label: '$50', popular: true },
     { amount: 200, label: '$200' },
   ],
-  minTopupUsd: 20,
+  /**
+   * 最低充值 $5。
+   *
+   * ⚠️ 这个数原来是 $20,约束来自**信用卡手续费** —— $10 档 7.9%、$5 档 11.9%,
+   *    收不回成本。换成加密货币后手续费只有 1%,低一个数量级,这个约束消失了。
+   *    同行 AiHubMix 最低 ¥1;在没有品牌信任的阶段,$20 的决策成本比价格更劝退。
+   *    改回卡通道时要把这个数调回去。
+   */
+  minTopupUsd: 5,
 } as const
